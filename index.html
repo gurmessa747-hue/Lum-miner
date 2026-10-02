@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>LUM Miner</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --card: #151a23;
+      --line: #2a3344;
+      --text: #e8eef8;
+      --muted: #8b98ad;
+      --accent: #3ddc97;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .app {
+      max-width: 430px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding: 16px 16px 88px;
+    }
+    h1 { font-size: 20px; margin: 4px 0; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+    button.action {
+      width: 100%;
+      margin-top: 10px;
+      padding: 12px;
+      border: 0;
+      border-radius: 12px;
+      font-weight: 700;
+      background: var(--accent);
+      color: #062116;
+    }
+    input {
+      width: 100%;
+      margin-top: 8px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #0f131b;
+      color: var(--text);
+    }
+    .addr {
+      font-size: 12px;
+      word-break: break-all;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .page { display: none; }
+    .page.on { display: block; }
+    .nav {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: space-around;
+      background: #10151d;
+      border-top: 1px solid var(--line);
+      padding: 8px 4px 12px;
+    }
+    .nav button {
+      background: transparent;
+      border: 0;
+      color: var(--muted);
+      font-size: 11px;
+      width: 20%;
+    }
+    .nav button.on { color: var(--accent); font-weight: 700; }
+    .pill {
+      display: inline-block;
+      background: #10261c;
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section id="home" class="page on">
+      <h1>LUM Miner</h1>
+      <div class="sub">Hold LUM in your TON wallet to boost the allocated rate.</div>
+      <div class="card">
+        <div class="label">Allocated hashrate</div>
+        <div class="value" id="hashrate">0.000400 TH/s</div>
+        <div class="row"><span>Base</span><span>0.000400 TH/s</span></div>
+        <div class="row"><span>Boost</span><span id="boost">1.00×</span></div>
+        <div class="row"><span>LUM held</span><span id="held">0</span></div>
+        <div class="row"><span>Status</span><span id="status">Idle</span></div>
+      </div>
+      <div class="card">
+        <div class="label">Session reward</div>
+        <div class="value" id="reward">0.000000 LUM</div>
+        <div class="row"><span>Time</span><span id="elapsed">00:00:00</span></div>
+        <button class="action" id="toggle">Start mining</button>
+      </div>
+    </section>
+
+    <section id="tasks" class="page">
+      <h1>Tasks</h1>
+      <div class="sub">Finish tasks to earn extra LUM.</div>
+      <div class="card">
+        <div class="label">Daily check-in</div>
+        <div class="row"><span>+25 LUM</span><span class="pill">Ready</span></div>
+      </div>
+      <div class="card">
+        <div class="label">Join community</div>
+        <div class="row"><span>+50 LUM</span><span class="pill">Open</span></div>
+      </div>
+      <div class="card">
+        <div class="label">Hold LUM</div>
+        <div class="row"><span>Boost unlock</span><span class="pill">Live</span></div>
+      </div>
+    </section>
+
+    <section id="boost" class="page">
+      <h1>Boost</h1>
+      <div class="sub">Wallet LUM balance sets the multiplier. Cap 3.00×.</div>
+      <div class="card">
+        <div class="label">Jetton master</div>
+        <div>LUM · Lumeon</div>
+        <div class="addr">EQCuTahLfZSKRGP4GF02yPMnFAq-bT1XJU4Z8V1DH_5sWlmw</div>
+        <div class="row"><span>Current boost</span><span id="boost2">1.00×</span></div>
+        <div class="row"><span>Effective rate</span><span id="rate2">0.000400 TH/s</span></div>
+      </div>
+    </section>
+
+    <section id="friends" class="page">
+      <h1>Friends</h1>
+      <div class="sub">Invite friends. Their mining adds a referral bonus.</div>
+      <div class="card">
+        <div class="row"><span>Friends</span><span>0</span></div>
+        <div class="row"><span>Bonus</span><span>0 LUM</span></div>
+        <button class="action" id="invite">Copy invite link</button>
+      </div>
+    </section>
+
+    <section id="profile" class="page">
+      <h1>Profile</h1>
+      <div class="sub">Paste a TON wallet. The app only reads the LUM balance.</div>
+      <div class="card">
+        <div class="label">TON wallet</div>
+        <input id="wallet" placeholder="EQ… or UQ…" />
+        <button class="action" id="load">Read LUM balance</button>
+        <div class="row"><span>Balance</span><span id="bal">0 LUM</span></div>
+        <div class="row"><span>Claimable</span><span id="claimable">0.000000 LUM</span></div>
+        <div class="addr" id="msg">Not loaded</div>
+      </div>
+    </section>
+  </div>
+
+  <nav class="nav">
+    <button class="on" data-page="home">Home</button>
+    <button data-page="tasks">Tasks</button>
+    <button data-page="boost">Boost</button>
+    <button data-page="friends">Friends</button>
+    <button data-page="profile">Profile</button>
+  </nav>
+
+  <script>
+    const JETTON = "EQCuTahLfZSKRGP4GF02yPMnFAq-bT1XJU4Z8V1DH_5sWlmw";
+    const BASE = 0.0004;
+    const RATE = 0.01;
+    let on = false;
+    let acc = 0;
+    let t0 = 0;
+    let timer = null;
+    let lum = 0;
+
+    const $ = (id) => document.getElementById(id);
+
+    function mult() {
+      return Math.min(3, 1 + Math.log10(1 + Math.max(0, lum)) / 8);
+    }
+
+    function paint() {
+      const m = mult();
+      $("boost").textContent = m.toFixed(2) + "×";
+      $("boost2").textContent = m.toFixed(2) + "×";
+      $("hashrate").textContent = (BASE * m).toFixed(6) + " TH/s";
+      $("rate2").textContent = (BASE * m).toFixed(6) + " TH/s";
+      $("held").textContent = lum.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      $("bal").textContent = lum.toLocaleString(undefined, { maximumFractionDigits: 4 }) + " LUM";
+      $("reward").textContent = acc.toFixed(6) + " LUM";
+      $("claimable").textContent = acc.toFixed(6) + " LUM";
+      if (on) {
+        const s = Math.floor((Date.now() - t0) / 1000);
+        $("elapsed").textContent =
+          String(Math.floor(s / 3600)).padStart(2, "0") + ":" +
+          String(Math.floor((s % 3600) / 60)).padStart(2, "0") + ":" +
+          String(s % 60).padStart(2, "0");
+      }
+    }
+
+    function tick() {
+      acc += BASE * mult() * RATE;
+      paint();
+    }
+
+    $("toggle").onclick = () => {
+      on = !on;
+      $("status").textContent = on ? "Mining" : "Idle";
+      $("toggle").textContent = on ? "Stop mining" : "Start mining";
+      if (on) {
+        t0 = Date.now();
+        timer = setInterval(tick, 1000);
+      } else {
+        clearInterval(timer);
+      }
+      paint();
+    };
+
+    $("load").onclick = async () => {
+      const wallet = $("wallet").value.trim();
+      if (!wallet) {
+        $("msg").textContent = "Paste a wallet first";
+        return;
+      }
+      $("msg").textContent = "Reading…";
+      try {
+        const url = "https://tonapi.io/v2/accounts/" + encodeURIComponent(wallet) + "/jettons/" + encodeURIComponent(JETTON);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const raw = data.balance || "0";
+        const decimals = (data.jetton && data.jetton.decimals) || 9;
+        lum = Number(raw) / Math.pow(10, decimals);
+        $("msg").textContent = "Balance loaded";
+      } catch (e) {
+        lum = 0;
+        $("msg").textContent = "Could not read balance. Check the wallet address.";
+      }
+      paint();
+    };
+
+    document.querySelectorAll(".nav button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll(".nav button").forEach((b) => b.classList.remove("on"));
+        document.querySelectorAll(".page").forEach((p) => p.classList.remove("on"));
+        btn.classList.add("on");
+        $(btn.dataset.page).classList.add("on");
+      };
+    });
+
+    $("invite").onclick = async () => {
+      const link = "https://t.me/your_bot?start=ref";
+      try {
+        await navigator.clipboard.writeText(link);
+        $("invite").textContent = "Copied";
+      } catch (e) {
+        $("invite").textContent = link;
+      }
+    };
+
+    try {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    } catch (e) {}
+
+    paint();
+  </script>
+</body>
+</html>
