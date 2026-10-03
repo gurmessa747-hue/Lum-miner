@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>LUM Miner</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
+  <style>
+    :root { --bg:#0c1016; --card:#171c24; --line:#2a3340; --text:#f4f7fb; --muted:#9aa6b5; --green:#2fce4a; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    .app { max-width:430px; margin:0 auto; min-height:100vh; padding:14px 14px 92px; }
+    .page { display:none; } .page.on { display:block; }
+    h1 { font-size:28px; margin:4px 0; }
+    .sub, .label, .note, .addr { color:var(--muted); }
+    .sub { margin:0 0 14px; }
+    .green { color:var(--green); font-weight:700; }
+    button.btn, button.buy, button.watch, button.go, button.claim, button.action, button.pill, button.ad {
+      border:0; background:var(--green); color:#06210c; font-weight:800; border-radius:12px;
+    }
+    button.btn, button.buy, button.watch, button.go, button.claim, button.action, button.ad { width:100%; padding:12px; }
+    button.ad { margin-top:10px; }
+    button.buy:disabled, button.go.done, button.watch:disabled, button.pill:disabled { background:#1e3a28; color:#9ed7ae; }
+    .card, .top, .fcard { background:#171c24; border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+    .fcard, .row, .user, .adhead, .bank { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+    .user { justify-content:flex-start; }
+    .avatar, .ficon { width:42px; height:42px; border-radius:12px; background:#121820; display:flex; align-items:center; justify-content:center; flex:0 0 42px; }
+    .avatar { background:var(--green); color:#06210c; font-weight:800; }
+    .grow { flex:1; min-width:0; }
+    .addr { font-size:12px; word-break:break-all; }
+    button.pill { border-radius:999px; padding:10px 14px; }
+    .top { display:grid; grid-template-columns:1fr 1fr; }
+    .bank { grid-column:1 / -1; }
+    .track, .bar { height:8px; background:#243044; border-radius:99px; overflow:hidden; flex:1; }
+    .fill, .bar i { display:block; height:100%; background:var(--green); }
+    .wallet-wrap, .claim-num { text-align:center; }
+    .claim-num { font-size:40px; font-weight:800; }
+    .usd { display:inline-block; margin-top:8px; background:var(--green); color:#06210c; border-radius:999px; padding:6px 12px; font-weight:800; }
+    .stage { position:relative; height:230px; display:flex; align-items:center; justify-content:center; }
+    .mark { width:180px; height:180px; border-radius:50%; background:radial-gradient(circle at 50% 42%, #b6ff4a, #39e023 42%, #0b8f12); box-shadow:inset 0 0 0 12px #071208; position:relative; }
+    .mark:before, .mark:after, .mark span { content:""; position:absolute; background:#111; border-radius:40px; }
+    .mark:before { width:44px; height:74px; left:68px; top:36px; }
+    .mark:after { width:32px; height:58px; left:40px; top:58px; transform:rotate(-28deg); }
+    .mark span { width:32px; height:58px; right:40px; top:58px; transform:rotate(28deg); }
+    .side { position:absolute; right:0; display:flex; flex-direction:column; gap:8px; }
+    .side button { width:40px; height:40px; border:0; border-radius:50%; background:#2a3646; color:#fff; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .pack { background:#141b24; border:1px solid #2a3948; border-radius:16px; padding:12px; }
+    .pack.active { border-color:#2f6a38; background:#142218; }
+    svg.chart { width:100%; height:110px; display:block; margin:8px 0; }
+    select, input { width:100%; margin-top:8px; padding:12px; border-radius:12px; border:1px solid var(--line); background:#0f131b; color:var(--text); }
+    .friend { display:flex; align-items:center; gap:10px; border:1px solid #2f6a38; border-radius:16px; padding:12px; margin-bottom:10px; }
+    .nav { position:fixed; left:0; right:0; bottom:0; display:flex; background:#0d1218; border-top:1px solid #242424; padding:8px 4px 12px; }
+    .nav button { flex:1; background:transparent; border:0; color:var(--muted); }
+    .nav button.on { color:var(--green); font-weight:800; }
+    #whist { white-space:pre-line; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section id="home" class="page on">
+      <div class="top">
+        <div><div class="label" data-i="rate">MINING RATE</div><div id="hashrate">0.00040 TH/s</div></div>
+        <div><div class="label" data-i="rank">CURRENT RANK</div><div id="rank">Level 1</div></div>
+        <div class="bank"><span data-i="bank">Boost Bank</span><div class="track"><div class="fill" id="bank-fill"></div></div><span id="bank-time">0.0h / 12h</span></div>
+      </div>
+      <div class="wallet-wrap"><b id="held">0.00 LUM</b><div><span class="usd" id="usd">~$0.00 USD</span></div></div>
+      <div class="stage">
+        <div class="mark"><span></span></div>
+        <div class="side"><button id="help">?</button><button id="copy-addr">Lx</button></div>
+      </div>
+      <div class="claim-num" id="reward">+0.0000</div>
+      <button class="claim" id="claim" data-i="claim">Claim</button>
+      <button class="ad" id="ad">Watch boost +0.0002 TH/s (+1h)</button>
+    </section>
+
+    <section id="tasks" class="page">
+      <h1 data-i="tasks">Tasks</h1>
+      <p class="sub" data-i="taskSub">Complete tasks and watch boosts to earn LUM</p>
+      <div class="card">
+        <div class="adhead"><b data-i="ads">Watch Ads</b><span class="green" id="ad-meta">0/10</span></div>
+        <div class="note" id="ad-left2">10 left today</div>
+        <div class="bar"><i id="ad-bar"></i></div>
+        <button class="watch" id="watch">Watch Ad (+15 LUM)</button>
+      </div>
+      <div class="card"><div class="row"><b data-i="daily">Daily check-in</b><span class="green">+25 LUM</span></div><div class="note">Once per visit</div><button class="go" data-reward="25">GO</button></div>
+      <div class="card"><div class="row"><b>Join LUM channel</b><span class="green">+50 LUM</span></div><div class="note">Open the official bot channel</div><button class="go" data-url="https://t.me/lumeonminer_bot" data-reward="50">GO</button></div>
+      <div class="card"><div class="row"><b>Connect TON wallet</b><span class="green">+100 LUM</span></div><div class="note">Read your LUM balance</div><button class="go" id="task-wallet" data-reward="100">GO</button></div>
+      <div class="card"><div class="row"><b>Share invite</b><span class="green">+50 LUM</span></div><div class="note">Send your invite link</div><button class="go" id="task-share" data-reward="50">GO</button></div>
+    </section>
+
+    <section id="boost" class="page">
+      <h1>Boost Mining Speed</h1>
+      <p class="sub">Upgrade gear. +0.00002 TH/s per level. Price 40 × 1.35^(level−1)</p>
+      <div class="row"><div><div id="boost-level">Level 1</div><div class="green" id="pnl">Session +0.00 LUM</div></div><span class="usd">Level 1–1000</span></div>
+      <svg class="chart" viewBox="0 0 320 120"><path d="M0,100 C40,90 60,20 110,18 C160,16 180,90 210,92 C250,94 280,60 320,48" fill="none" stroke="#2fce4a" stroke-width="3"/><path d="M0,100 C40,90 60,20 110,18 C160,16 180,90 210,92 C250,94 280,60 320,48 V120 H0 Z" fill="rgba(47,206,74,.25)"/></svg>
+      <b>Mining Speed Upgrade Packs</b>
+      <div class="row" style="margin:10px 0"><button class="btn" id="prev">Prev</button><span id="page-label"></span><button class="btn" id="next">Next</button></div>
+      <div class="grid" id="packs"></div>
+    </section>
+
+    <section id="friends" class="page">
+      <h1 data-i="friends">Friends</h1>
+      <p class="sub" data-i="inviteNote">1000 LUM per invite, plus 5% of friends mining</p>
+      <div class="fcard"><div class="ficon">🔗</div><div class="grow"><b data-i="invite">Your Invite Link</b><div class="addr">https://t.me/lumeonminer_bot?start=ref</div></div><button class="pill" id="invite" data-i="copy">Copy</button></div>
+      <div class="card"><div class="row"><b data-i="refs">Your Referrals</b><span id="ref-count">0 qualified</span></div><div class="note" id="ref-cut">5% mining cut: 0.00 LUM</div></div>
+      <div class="fcard"><div class="ficon">🎁</div><div class="grow"><b data-i="reward">Referral Reward</b><div class="note">+1000 LUM each</div></div><button class="pill" id="claim-ref" disabled data-i="claim">Claim</button></div>
+      <div class="fcard"><div class="ficon">⏳</div><div class="grow"><b>Team Wallet</b><div class="note">mining</div><div class="note" id="team-wallet">0 LUM from your network</div></div><button class="pill" id="share" data-i="share">Share</button></div>
+      <p class="sub">Latest invited friends</p>
+      <div id="friend-list"><div class="note">No friends yet. Share your invite link.</div></div>
+    </section>
+
+    <section id="profile" class="page">
+      <h1 data-i="profile">Profile & Wallet</h1>
+      <p class="sub" data-i="profileSub">Manage account, balances, and withdrawal requests.</p>
+      <div class="card user"><div class="avatar" id="avatar">L</div><div class="grow"><b id="uname">Miner</b><div class="note" id="handle">@lumeonminer_bot</div></div></div>
+      <div id="ton-connect"></div>
+      <div class="card"><div class="row"><div><b data-i="assets">Total Assets</b><div class="green">~$0.00 USD</div></div><b id="assets">0 LUM</b></div></div>
+      <div class="card"><div class="row"><div><b data-i="holding">Holding Wallet</b><div class="note" data-i="onchain">On-chain LUM</div></div><b id="bal">0 LUM</b></div></div>
+      <div class="card"><div class="row"><div><b data-i="mined">Mining Wallet</b><div class="note" data-i="minedSub">Mined balance</div></div><b id="mined">0 LUM</b></div></div>
+      <div class="card">
+        <b data-i="withdraw">Withdraw LUM</b>
+        <input id="wamount" type="number" min="10000" placeholder="Minimum 10000" />
+        <div class="note">Minimum 10,000 LUM. Fee 1,000 LUM. You receive amount minus 1,000.</div>
+        <button class="btn" id="do-withdraw" data-i="request">Request withdrawal</button>
+      </div>
+      <div class="card"><b data-i="history">Withdrawal History</b><div id="whist" class="note">No requests yet</div></div>
+      <div class="card">
+        <b data-i="lang">Language</b>
+        <select id="lang">
+          <option value="en">English</option>
+          <option value="hi">हिन्दी</option>
+          <option value="id">Bahasa Indonesia</option>
+          <option value="ha">Hausa</option>
+          <option value="ar">العربية</option>
+          <option value="fr">Français</option>
+          <option value="es">Español</option>
+          <option value="ru">Русский</option>
+          <option value="zh">中文</option>
+        </select>
+      </div>
+      <div class="card"><b data-i="admin">Contact Admin</b><div class="note">@lumeonminer_bot</div></div>
+      <div class="addr" id="msg"></div>
+    </section>
+  </div>
+  <nav class="nav">
+    <button class="on" data-page="home" data-i="mine">Mine</button>
+    <button data-page="tasks" data-i="tasks">Tasks</button>
+    <button data-page="boost" data-i="boost">Boost</button>
+    <button data-page="friends" data-i="friends">Friends</button>
+    <button data-page="profile" data-i="profileNav">Profile</button>
+  </nav>
+  <script>
+    const I18N = {
+      en:{rate:"MINING RATE",rank:"CURRENT RANK",bank:"Boost Bank",claim:"Claim",tasks:"Tasks",taskSub:"Complete tasks and watch boosts to earn LUM",ads:"Watch Ads",daily:"Daily check-in",boost:"Boost",friends:"Friends",inviteNote:"1000 LUM per invite, plus 5% of friends mining",invite:"Your Invite Link",copy:"Copy",refs:"Your Referrals",reward:"Referral Reward",share:"Share",profile:"Profile & Wallet",profileSub:"Manage account, balances, and withdrawal requests.",assets:"Total Assets",holding:"Holding Wallet",onchain:"On-chain LUM",mined:"Mining Wallet",minedSub:"Mined balance",withdraw:"Withdraw LUM",request:"Request withdrawal",history:"Withdrawal History",lang:"Language",admin:"Contact Admin",mine:"Mine",profileNav:"Profile"},
+      hi:{rate:"माइनिंग गति",rank:"स्तर",bank:"बूस्ट बैंक",claim:"क्लेम",tasks:"टास्क",taskSub:"टास्क पूरे करें और LUM कमाएँ",ads:"विज्ञापन",daily:"दैनिक चेक-इन",boost:"बूस्ट",friends:"दोस्त",inviteNote:"हर आमंत्रण पर 1000 LUM और दोस्तों की माइनिंग का 5%",invite:"आमंत्रण लिंक",copy:"कॉपी",refs:"रेफरल",reward:"रेफरल इनाम",share:"शेयर",profile:"प्रोफाइल और वॉलेट",profileSub:"खाता, बैलेंस और निकासी अनुरोध।",assets:"कुल संपत्ति",holding:"होल्डिंग वॉलेट",onchain:"ऑन-चेन LUM",mined:"माइनिंग वॉलेट",minedSub:"माइन्ड बैलेंस",withdraw:"LUM निकालें",request:"निकासी अनुरोध",history:"निकासी इतिहास",lang:"भाषा",admin:"एडमिन",mine:"माइन",profileNav:"प्रोफाइल"},
+      id:{rate:"KECEPATAN TAMBANG",rank:"LEVEL",bank:"Bank boost",claim:"Klaim",tasks:"Tugas",taskSub:"Selesaikan tugas dan tonton boost untuk dapat LUM",ads:"Iklan",daily:"Check-in harian",boost:"Boost",friends:"Teman",inviteNote:"1000 LUM per undangan, plus 5% hasil tambang teman",invite:"Tautan undangan",copy:"Salin",refs:"Referral",reward:"Hadiah referral",share:"Bagikan",profile:"Profil & Dompet",profileSub:"Kelola akun, saldo, dan permintaan penarikan.",assets:"Total aset",holding:"Dompet simpanan",onchain:"LUM on-chain",mined:"Dompet tambang",minedSub:"Saldo ditambang",withdraw:"Tarik LUM",request:"Minta penarikan",history:"Riwayat penarikan",lang:"Bahasa",admin:"Hubungi admin",mine:"Tambang",profileNav:"Profil"},
+      ha:{rate:"GUDUN TAMA",rank:"MATSAYI",bank:"Bankin boost",claim:"Karba",tasks:"Ayyuka",taskSub:"Kammala ayyuka don samun LUM",ads:"Talla",daily:"Shiga na yau",boost:"Boost",friends:"Abokai",inviteNote:"1000 LUM ga kowane gayyata, da 5% na tamar abokai",invite:"Hanyar gayyata",copy:"Kwafa",refs:"Gayyatoci",reward:"Ladan gayyata",share:"Raba",profile:"Bayanan sirri da wallet",profileSub:"Sarrafa asusu, ma'auni, da bukatar cirewa.",assets:"Dukiyar duka",holding:"Wallet na riqe",onchain:"LUM a chain",mined:"Wallet na tama",minedSub:"Adadin da aka tama",withdraw:"Cire LUM",request:"Nemi cirewa",history:"Tarihin cirewa",lang:"Harshe",admin:"Tuntuɓi admin",mine:"Tama",profileNav:"Bayani"},
+      ar:{rate:"سرعة التعدين",rank:"المستوى",bank:"بنك التعزيز",claim:"سحب",tasks:"المهام",taskSub:"أكمل المهام لتحصل على LUM",ads:"الإعلانات",daily:"تسجيل يومي",boost:"تعزيز",friends:"الأصدقاء",inviteNote:"1000 LUM لكل دعوة و5% من تعدين الأصدقاء",invite:"رابط الدعوة",copy:"نسخ",refs:"الإحالات",reward:"مكافأة الإحالة",share:"مشاركة",profile:"الملف والمحفظة",profileSub:"إدارة الحساب والأرصدة وطلبات السحب.",assets:"إجمالي الأصول",holding:"محفظة الحيازة",onchain:"LUM على السلسلة",mined:"محفظة التعدين",minedSub:"الرصيد المعدّن",withdraw:"سحب LUM",request:"طلب سحب",history:"سجل السحب",lang:"اللغة",admin:"تواصل مع الإدارة",mine:"تعدين",profileNav:"الملف"},
+      fr:{rate:"VITESSE",rank:"NIVEAU",bank:"Banque boost",claim:"Réclamer",tasks:"Tâches",taskSub:"Terminez les tâches pour gagner des LUM",ads:"Pubs",daily:"Check-in",boost:"Boost",friends:"Amis",inviteNote:"1000 LUM par invite, plus 5% du minage des amis",invite:"Lien d'invitation",copy:"Copier",refs:"Parrainages",reward:"Récompense",share:"Partager",profile:"Profil et portefeuille",profileSub:"Compte, soldes et demandes de retrait.",assets:"Actifs",holding:"Portefeuille détenu",onchain:"LUM on-chain",mined:"Portefeuille minage",minedSub:"Solde miné",withdraw:"Retirer LUM",request:"Demander un retrait",history:"Historique",lang:"Langue",admin:"Contacter l'admin",mine:"Miner",profileNav:"Profil"},
+      es:{rate:"VELOCIDAD",rank:"NIVEL",bank:"Banco boost",claim:"Reclamar",tasks:"Tareas",taskSub:"Completa tareas para ganar LUM",ads:"Anuncios",daily:"Check-in",boost:"Boost",friends:"Amigos",inviteNote:"1000 LUM por invitación y 5% del minado de amigos",invite:"Enlace",copy:"Copiar",refs:"Referidos",reward:"Recompensa",share:"Compartir",profile:"Perfil y billetera",profileSub:"Cuenta, saldos y retiros.",assets:"Activos",holding:"Billetera",onchain:"LUM on-chain",mined:"Billetera minada",minedSub:"Saldo minado",withdraw:"Retirar LUM",request:"Solicitar retiro",history:"Historial",lang:"Idioma",admin:"Contactar admin",mine:"Minar",profileNav:"Perfil"},
+      ru:{rate:"СКОРОСТЬ",rank:"УРОВЕНЬ",bank:"Банк буста",claim:"Забрать",tasks:"Задания",taskSub:"Выполняйте задания, чтобы получить LUM",ads:"Реклама",daily:"Чек-ин",boost:"Буст",friends:"Друзья",inviteNote:"1000 LUM за инвайт и 5% майнинга друзей",invite:"Ссылка",copy:"Копировать",refs:"Рефералы",reward:"Награда",share:"Поделиться",profile:"Профиль и кошелек",profileSub:"Аккаунт, балансы и вывод.",assets:"Активы",holding:"Кошелек",onchain:"LUM в сети",mined:"Майнинг",minedSub:"Намайнено",withdraw:"Вывод LUM",request:"Запросить вывод",history:"История",lang:"Язык",admin:"Админ",mine:"Майнинг",profileNav:"Профиль"},
+      zh:{rate:"算力",rank:"等级",bank:"加速池",claim:"领取",tasks:"任务",taskSub:"完成任务获得 LUM",ads:"广告",daily:"签到",boost:"加速",friends:"好友",inviteNote:"每位邀请 1000 LUM，另加好友挖矿的 5%",invite:"邀请链接",copy:"复制",refs:"邀请",reward:"邀请奖励",share:"分享",profile:"资料与钱包",profileSub:"管理账户、余额和提现请求。",assets:"总资产",holding:"持有钱包",onchain:"链上 LUM",mined:"挖矿钱包",minedSub:"已挖余额",withdraw:"提取 LUM",request:"申请提现",history:"提现记录",lang:"语言",admin:"联系管理员",mine:"挖矿",profileNav:"资料"}
+    };
+    const JETTON = "EQCuTahLfZSKRGP4GF02yPMnFAq-bT1XJU4Z8V1DH_5sWlmw";
+    const INVITE = "https://t.me/lumeonminer_bot?start=ref";
+    const BASE = 0.0004, STEP = 0.00002, MAX = 1000, PAGE = 20, FEE = 1000, MINW = 10000;
+    let pending = 0, lum = 0, address = "", ads = 0, level = 1, page = 0, refs = 0, friendMine = 0, bank = 0, lang = "en", history = [], adUntil = 0;
+    const $ = (id) => document.getElementById(id);
+    function t(k){ return (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; }
+    function applyLang(){ document.querySelectorAll("[data-i]").forEach((el)=>{ el.textContent = t(el.dataset.i); }); }
+    function costOf(n){ if(n<=1) return 0; const c = 40*Math.pow(1.35,n-1); return Number.isFinite(c)?Math.round(c):Infinity; }
+    function rateOf(n){ return BASE+(n-1)*STEP; }
+    function rateNow(){ return rateOf(level)*Math.min(3,1+Math.log10(1+Math.max(0,lum))/8) + (Date.now()<adUntil?0.0002:0); }
+    function cut(){ return friendMine*0.05; }
+    function renderPacks(){
+      const start = page*PAGE+1, end = Math.min(MAX,start+PAGE-1);
+      $("page-label").textContent = start+"-"+end;
+      $("packs").innerHTML = "";
+      for(let n=start;n<=end;n++){
+        const cost = costOf(n);
+        const el = document.createElement("div");
+        el.className = "pack"+(n===level?" active":"");
+        el.innerHTML = "<b>Level "+n+"</b><div class='green'>+"+rateOf(n).toFixed(5)+" TH/s</div><button class='buy'></button>";
+        const btn = el.querySelector("button");
+        btn.disabled = n<=level || !Number.isFinite(cost);
+        btn.textContent = n===level?"ACTIVE":n<level?"OWNED":(Number.isFinite(cost)?cost.toLocaleString():"Too large")+" LUM";
+        btn.onclick = ()=>{ if(n<=level||!Number.isFinite(cost)||pending<cost){ if(n>level&&pending<cost) alert("Not enough claim balance"); return; } pending -= cost; level = n; renderPacks(); paint(); };
+        $("packs").appendChild(el);
+      }
+    }
+    function paint(){
+      $("hashrate").textContent = rateNow().toFixed(5)+" TH/s";
+      $("rank").textContent = "Level "+level;
+      $("boost-level").textContent = "Level "+level;
+      $("pnl").textContent = "Session +"+pending.toFixed(2)+" LUM";
+      $("held").textContent = lum.toFixed(2)+" LUM";
+      $("bal").textContent = lum.toFixed(4)+" LUM";
+      $("mined").textContent = pending.toFixed(2)+" LUM";
+      $("assets").textContent = (lum+pending).toFixed(2)+" LUM";
+      $("reward").textContent = "+"+pending.toFixed(4);
+      $("bank-time").textContent = bank.toFixed(1)+"h / 12h";
+      $("bank-fill").style.width = Math.min(100,bank/12*100)+"%";
+      $("ad-meta").textContent = ads+"/10";
+      $("ad-left2").textContent = (10-ads)+" left today";
+      $("ad-bar").style.width = (ads/10*100)+"%";
+      $("watch").disabled = ads>=10;
+      $("ref-count").textContent = refs+" qualified";
+      $("ref-cut").textContent = "5% mining cut: "+cut().toFixed(2)+" LUM";
+      $("team-wallet").textContent = (refs*1000+cut()).toFixed(2)+" LUM from your network";
+      $("claim-ref").disabled = refs===0 && cut()===0;
+      $("whist").textContent = history.length?history.join("\n"):"No requests yet";
+      applyLang();
+    }
+    setInterval(()=>{ pending += rateNow()*8/3600; friendMine += refs*rateNow()*8/3600; bank = Math.min(12,bank+1/3600); paint(); },1000);
+    $("claim").onclick = ()=>{ pending = 0; paint(); };
+    $("ad").onclick = ()=>{ adUntil = Date.now()+3600000; paint(); };
+    $("watch").onclick = ()=>{ if(ads>=10) return; ads++; pending += 15; paint(); };
+    $("help").onclick = ()=>alert("Allocated app rate. Holding LUM raises the multiplier. Watch boost is local, not a live ad network.");
+    $("copy-addr").onclick = ()=>navigator.clipboard.writeText(JETTON);
+    document.querySelectorAll(".go").forEach((btn)=>btn.onclick=()=>{
+      if(btn.classList.contains("done")) return;
+      if(btn.id==="task-wallet" && !address) return document.querySelector('[data-page="profile"]').click();
+      if(btn.id==="task-share") $("share").click();
+      if(btn.dataset.url) (window.Telegram&&Telegram.WebApp?Telegram.WebApp.openLink(btn.dataset.url):window.open(btn.dataset.url,"_blank"));
+      pending += Number(btn.dataset.reward||0); btn.classList.add("done"); btn.textContent="CLAIMED"; paint();
+    });
+    $("prev").onclick = ()=>{ page=Math.max(0,page-1); renderPacks(); };
+    $("next").onclick = ()=>{ page=Math.min(Math.ceil(MAX/PAGE)-1,page+1); renderPacks(); };
+    $("invite").onclick = async ()=>{ try{ await navigator.clipboard.writeText(INVITE); $("invite").textContent="OK"; }catch(e){} };
+    $("share").onclick = ()=>{ const url="https://t.me/share/url?url="+encodeURIComponent(INVITE)+"&text="+encodeURIComponent("Mine LUM with me"); window.Telegram&&Telegram.WebApp?Telegram.WebApp.openTelegramLink(url):window.open(url,"_blank"); };
+    $("claim-ref").onclick = ()=>{ pending += refs*1000 + cut(); refs = 0; friendMine = 0; $("friend-list").innerHTML = "<div class='note'>No friends yet. Share your invite link.</div>"; paint(); };
+    $("do-withdraw").onclick = ()=>{
+      const amount = Number($("wamount").value);
+      if(amount<MINW){ $("msg").textContent="Minimum is 10000 LUM"; return; }
+      if(pending<amount){ $("msg").textContent="Not enough mined balance"; return; }
+      pending -= amount;
+      history.unshift((amount-FEE)+" LUM requested, fee "+FEE);
+      $("msg").textContent="Request saved. Net "+(amount-FEE)+" LUM. Not sent on-chain yet.";
+      paint();
+    };
+    $("lang").onchange = ()=>{ lang=$("lang").value; paint(); };
+    document.querySelectorAll(".nav button").forEach((btn)=>btn.onclick=()=>{
+      document.querySelectorAll(".nav button").forEach((b)=>b.classList.remove("on"));
+      document.querySelectorAll(".page").forEach((p)=>p.classList.remove("on"));
+      btn.classList.add("on"); $(btn.dataset.page).classList.add("on");
+    });
+    try {
+      const u = Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user;
+      if(u){ $("uname").textContent=u.first_name||"Miner"; $("handle").textContent=u.username?"@"+u.username:String(u.id); $("avatar").textContent=(u.first_name||"L").slice(0,1); }
+      Telegram.WebApp.ready(); Telegram.WebApp.expand();
+    } catch(e){}
+    const ui = new TON_CONNECT_UI.TonConnectUI({ manifestUrl:"https://lum-miner.gurmessa747.workers.dev/tonconnect-manifest.json" });
+    ui.uiOptions = { twaReturnUrl:"https://t.me/lumeonminer_bot" };
+    const btn=document.createElement("button"); btn.className="action"; btn.textContent="Connect Wallet"; btn.onclick=()=>ui.openModal();
+    $("ton-connect").appendChild(btn);
+    ui.onStatusChange(async (wallet)=>{
+      address = wallet&&wallet.account?wallet.account.address:"";
+      btn.textContent = address?"Wallet connected":"Connect Wallet";
+      if(!address){ lum=0; paint(); return; }
+      try {
+        const res = await fetch("https://tonapi.io/v2/accounts/"+encodeURIComponent(address)+"/jettons/"+encodeURIComponent(JETTON));
+        const data = await res.json();
+        lum = Number(data.balance||"0")/Math.pow(10,(data.jetton&&data.jetton.decimals)||9);
+        $("msg").textContent="Balance loaded";
+      } catch(e){ $("msg").textContent="Could not read LUM balance"; }
+      paint();
+    });
+    renderPacks(); paint();
+  </script>
+</body>
+</html>
