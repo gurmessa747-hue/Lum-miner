@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>LUM Miner</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
+  <style>
+    :root { --bg:#071018; --card:#121a24; --line:#243140; --text:#f4f7fb; --muted:#8ea0b5; --blue:#2f7bff; --gold:#f5c542; --green:#1f9d55; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,sans-serif; background:radial-gradient(circle at 50% 30%, #163044, var(--bg) 55%); color:var(--text); }
+    .app { max-width:430px; margin:0 auto; min-height:100vh; padding:14px 14px 92px; }
+    .top { background:rgba(18,26,36,.9); border:1px solid var(--line); border-radius:18px; padding:12px; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .label { color:var(--muted); font-size:11px; letter-spacing:.06em; }
+    .rate { font-size:22px; font-weight:800; margin-top:4px; }
+    .rank { font-size:22px; font-weight:800; text-align:right; margin-top:4px; }
+    .bank { grid-column:1 / -1; display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; margin-top:6px; }
+    .track { flex:1; height:6px; border-radius:99px; background:#243244; overflow:hidden; }
+    .fill { height:100%; width:0%; background:linear-gradient(90deg,#7c5cff,#5aa7ff); }
+    .wallet-wrap { text-align:center; margin:18px 0 8px; }
+    .wallet-pill { display:inline-flex; gap:8px; align-items:center; background:#1b2836; border:1px solid #314458; border-radius:999px; padding:10px 16px; }
+    .usd { display:inline-block; margin-top:8px; background:var(--green); color:#fff; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; }
+    .stage { position:relative; height:250px; display:flex; align-items:center; justify-content:center; }
+    .coin { width:210px; height:210px; border-radius:50%; background:#101810; box-shadow:0 16px 40px rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .coin img { width:100%; height:100%; object-fit:cover; }
+    .mark { width:188px; height:188px; border-radius:50%; background:radial-gradient(circle at 50% 42%, #b6ff4a 0%, #39e023 42%, #0b8f12 78%); box-shadow:inset 0 0 0 14px #071208, 0 0 24px rgba(80,255,40,.35); position:relative; }
+    .mark:before, .mark:after, .mark span { content:""; position:absolute; background:#111; border-radius:40px 40px 18px 18px; }
+    .mark:before { width:46px; height:78px; left:71px; top:38px; }
+    .mark:after { width:34px; height:62px; left:42px; top:62px; transform:rotate(-28deg); }
+    .mark span { width:34px; height:62px; right:42px; top:62px; transform:rotate(28deg); }
+    .side { position:absolute; right:8px; display:flex; flex-direction:column; gap:10px; }
+    .side button { width:42px; height:42px; border-radius:50%; border:0; background:#2a3646; color:#fff; }
+    .claim-num { text-align:center; font-size:42px; font-weight:800; margin:8px 0 12px; }
+    button.claim { width:100%; border:0; border-radius:16px; padding:16px; background:var(--blue); color:#fff; font-size:18px; font-weight:700; }
+    button.ad { width:100%; margin-top:10px; border:0; border-radius:16px; padding:14px; background:var(--gold); color:#1d1400; font-weight:800; }
+    .page { display:none; } .page.on { display:block; }
+    .card { background:rgba(18,26,36,.9); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+    .row { display:flex; justify-content:space-between; margin-top:8px; }
+    button.action, button.ghost { width:100%; margin-top:10px; padding:12px; border-radius:12px; font-weight:700; }
+    button.action { border:0; background:var(--blue); color:#fff; }
+    button.ghost { border:1px solid var(--line); background:transparent; color:var(--text); }
+    .addr { font-size:12px; word-break:break-all; color:var(--muted); margin-top:6px; }
+    .nav { position:fixed; left:0; right:0; bottom:0; display:flex; background:#0d1520; border-top:1px solid var(--line); padding:8px 4px 12px; }
+    .nav button { flex:1; background:transparent; border:0; color:var(--muted); font-size:11px; }
+    .nav button.on { color:#7eb0ff; font-weight:700; }
+    h1 { font-size:20px; margin:4px 0 12px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section id="home" class="page on">
+      <div class="top">
+        <div>
+          <div class="label">MINING RATE</div>
+          <div class="rate" id="hashrate">0.0004 TH/s</div>
+        </div>
+        <div>
+          <div class="label" style="text-align:right">CURRENT RANK</div>
+          <div class="rank" id="rank">Level 1</div>
+        </div>
+        <div class="bank">
+          <span>Boost Bank</span>
+          <div class="track"><div class="fill" id="bank-fill"></div></div>
+          <span id="bank-time">0h / 12h</span>
+        </div>
+      </div>
+      <div class="wallet-wrap">
+        <div class="wallet-pill">Wallet: <b id="held">0.00 LUM</b></div>
+        <div><span class="usd" id="usd">~$0.00 USD</span></div>
+      </div>
+      <div class="stage">
+        <div class="coin" id="coin"><div class="mark"><span></span></div></div>
+        <div class="side">
+          <button id="help" type="button">?</button>
+          <button id="copy-addr" type="button">Lx</button>
+        </div>
+      </div>
+      <div class="claim-num" id="reward">+0.0000</div>
+      <button class="claim" id="claim">Claim</button>
+      <button class="ad" id="ad">Watch boost for +0.0002 TH/s (+1h)</button>
+    </section>
+
+    <section id="tasks" class="page">
+      <h1>Tasks</h1>
+      <div class="card"><div class="label">Daily check-in</div><div class="row"><span>+25 LUM</span><span id="task-daily">Ready</span></div><button class="action" id="claim-daily">Claim</button></div>
+      <div class="card"><div class="label">Connect wallet</div><div class="row"><span>+100 LUM</span><span id="task-wallet">Pending</span></div><button class="action" id="claim-wallet">Claim</button></div>
+      <div class="card"><div class="label">Share invite</div><div class="row"><span>+50 LUM</span><span id="task-share">Open</span></div><button class="action" id="claim-share">Share</button></div>
+    </section>
+
+    <section id="boost" class="page">
+      <h1>Boost</h1>
+      <div class="card">
+        <div class="label">LUM jetton</div>
+        <div class="addr">EQCuTahLfZSKRGP4GF02yPMnFAq-bT1XJU4Z8V1DH_5sWlmw</div>
+        <div class="row"><span>Hold boost</span><span id="boost">1.00×</span></div>
+        <div class="row"><span>Ad boost</span><span id="ad-left">off</span></div>
+        <button class="ghost" id="refresh">Refresh balance</button>
+      </div>
+    </section>
+
+    <section id="friends" class="page">
+      <h1>Friends</h1>
+      <div class="card">
+        <div class="addr">https://t.me/lumeonminer_bot?start=ref</div>
+        <button class="action" id="invite">Copy invite link</button>
+        <button class="ghost" id="share">Share in Telegram</button>
+      </div>
+    </section>
+
+    <section id="profile" class="page">
+      <h1>Profile</h1>
+      <div class="card">
+        <div id="ton-connect"></div>
+        <div class="addr" id="wallet">Not connected</div>
+        <div class="row"><span>Balance</span><span id="bal">0 LUM</span></div>
+        <div class="addr" id="msg">Connect a wallet to read LUM</div>
+      </div>
+    </section>
+  </div>
+  <nav class="nav">
+    <button class="on" data-page="home">Mine</button>
+    <button data-page="tasks">Tasks</button>
+    <button data-page="boost">Boost</button>
+    <button data-page="friends">Friends</button>
+    <button data-page="profile">Profile</button>
+  </nav>
+  <script>
+    const JETTON = "EQCuTahLfZSKRGP4GF02yPMnFAq-bT1XJU4Z8V1DH_5sWlmw";
+    const COIN_URL = "";
+    const BASE = 0.0004, RATE = 8;
+    const INVITE = "https://t.me/lumeonminer_bot?start=ref";
+    let pending = 0, lum = 0, address = "", adUntil = 0, bank = 0;
+    const $ = (id) => document.getElementById(id);
+    if (COIN_URL) {
+      const img = document.createElement("img");
+      img.src = COIN_URL;
+      img.alt = "LUM";
+      $("coin").innerHTML = "";
+      $("coin").appendChild(img);
+    }
+    function holdMult() { return Math.min(3, 1 + Math.log10(1 + Math.max(0, lum)) / 8); }
+    function adBonus() { return Date.now() < adUntil ? 0.0002 : 0; }
+    function paint() {
+      const rate = BASE * holdMult() + adBonus();
+      $("hashrate").textContent = rate.toFixed(4) + " TH/s";
+      $("boost").textContent = holdMult().toFixed(2) + "×";
+      $("held").textContent = lum.toLocaleString(undefined, { maximumFractionDigits: 2 }) + " LUM";
+      $("bal").textContent = lum.toLocaleString(undefined, { maximumFractionDigits: 4 }) + " LUM";
+      $("usd").textContent = "~$0.00 USD";
+      $("reward").textContent = "+" + pending.toFixed(4);
+      $("wallet").textContent = address || "Not connected";
+      $("rank").textContent = lum >= 10000 ? "Level 3" : lum >= 1000 ? "Level 2" : "Level 1";
+      const left = Math.max(0, adUntil - Date.now());
+      $("ad-left").textContent = left ? Math.ceil(left / 60000) + "m" : "off";
+      $("bank-time").textContent = bank.toFixed(1) + "h / 12h";
+      $("bank-fill").style.width = Math.min(100, bank / 12 * 100) + "%";
+    }
+    setInterval(() => {
+      const rate = BASE * holdMult() + adBonus();
+      pending += rate * RATE / 3600;
+      bank = Math.min(12, bank + 1 / 3600);
+      paint();
+    }, 1000);
+    $("claim").onclick = () => { pending = 0; paint(); };
+    $("ad").onclick = () => { adUntil = Date.now() + 3600000; paint(); };
+    $("help").onclick = () => alert("Allocated app rate. Holding LUM raises the multiplier. The +1h button is a local boost, not a live ad network.");
+    $("copy-addr").onclick = () => navigator.clipboard.writeText(JETTON);
+    async function loadBalance() {
+      if (!address) { $("msg").textContent = "Connect a wallet to read LUM"; return; }
+      $("msg").textContent = "Reading…";
+      try {
+        const res = await fetch("https://tonapi.io/v2/accounts/" + encodeURIComponent(address) + "/jettons/" + encodeURIComponent(JETTON));
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const decimals = (data.jetton && data.jetton.decimals) || 9;
+        lum = Number(data.balance || "0") / Math.pow(10, decimals);
+        $("msg").textContent = "Balance loaded";
+        $("task-wallet").textContent = "Connected";
+      } catch (e) { $("msg").textContent = "Could not read LUM balance"; }
+      paint();
+    }
+    $("refresh").onclick = loadBalance;
+    $("claim-daily").onclick = () => { if ($("task-daily").textContent === "Claimed") return; pending += 25; $("task-daily").textContent = "Claimed"; paint(); };
+    $("claim-wallet").onclick = () => { if (!address) return document.querySelector('[data-page="profile"]').click(); if ($("task-wallet").textContent === "Claimed") return; pending += 100; $("task-wallet").textContent = "Claimed"; paint(); };
+    function share() {
+      const url = "https://t.me/share/url?url=" + encodeURIComponent(INVITE) + "&text=" + encodeURIComponent("Mine LUM with me");
+      if (window.Telegram && Telegram.WebApp) Telegram.WebApp.openTelegramLink(url); else window.open(url, "_blank");
+      if ($("task-share").textContent !== "Claimed") { pending += 50; $("task-share").textContent = "Claimed"; paint(); }
+    }
+    $("claim-share").onclick = share;
+    $("share").onclick = share;
+    $("invite").onclick = async () => { try { await navigator.clipboard.writeText(INVITE); $("invite").textContent = "Copied"; } catch (e) {} };
+    document.querySelectorAll(".nav button").forEach((btn) => btn.onclick = () => {
+      document.querySelectorAll(".nav button").forEach((b) => b.classList.remove("on"));
+      document.querySelectorAll(".page").forEach((p) => p.classList.remove("on"));
+      btn.classList.add("on");
+      $(btn.dataset.page).classList.add("on");
+    });
+    const ui = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: "https://lum-miner.gurmessa747.workers.dev/tonconnect-manifest.json" });
+    ui.uiOptions = { twaReturnUrl: "https://t.me/lumeonminer_bot" };
+    const btn = document.createElement("button");
+    btn.className = "action";
+    btn.textContent = "Connect wallet";
+    btn.onclick = () => ui.openModal();
+    document.getElementById("ton-connect").appendChild(btn);
+    ui.onStatusChange((wallet) => {
+      address = wallet && wallet.account ? wallet.account.address : "";
+      btn.textContent = address ? "Wallet connected" : "Connect wallet";
+      if (!address) { lum = 0; paint(); return; }
+      loadBalance();
+    });
+    try { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } catch (e) {}
+    paint();
+  </script>
+</body>
+</html>
