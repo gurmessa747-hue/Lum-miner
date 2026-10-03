@@ -16,7 +16,7 @@ async function checkJoin(request, env) {
   const body = await request.json().catch(() => ({}));
   const chat = CHANNELS[body.task];
   if (!chat) return Response.json({ ok: false, error: "Unknown task" }, { status: 400 });
-  const user = await telegramUser(request.headers.get("X-Telegram-Init-Data") || "", env.BOT_TOKEN);
+  const user = await telegramUser(body.initData || request.headers.get("X-Telegram-Init-Data") || "", env.BOT_TOKEN);
   if (!user) return Response.json({ ok: false, error: "Open this inside Telegram" }, { status: 401 });
   const data = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/getChatMember?chat_id=" + encodeURIComponent(chat) + "&user_id=" + user.id).then((r) => r.json());
   const status = data.result && data.result.status;
@@ -29,9 +29,11 @@ async function telegramUser(initData, token) {
   if (!hash) return null;
   params.delete("hash");
   const pairs = [...params.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => k + "=" + v).join("\n");
-  const secret = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  const enc = new TextEncoder();
+  const webKey = await crypto.subtle.importKey("raw", enc.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const secret = await crypto.subtle.sign("HMAC", webKey, enc.encode(token));
   const key = await crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(pairs));
+  const mac = await crypto.subtle.sign("HMAC", key, enc.encode(pairs));
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
   if (hex !== hash) return null;
   return JSON.parse(params.get("user") || "null");
@@ -50,14 +52,14 @@ const HTML = `<!DOCTYPE html>
     * { box-sizing:border-box; } body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
     .app { max-width:430px; margin:0 auto; min-height:100vh; padding:14px 14px 96px; }
     .page { display:none; } .page.on { display:block; } h1 { font-size:28px; margin:4px 0; }
-    .sub, .label, .note, .addr { color:var(--muted); } .green { color:var(--green); font-weight:700; }
-    button.btn, button.buy, button.watch, button.go, button.claim, button.action, button.pill, button.ad { border:0; background:var(--green); color:#06210c; font-weight:800; border-radius:12px; }
-    button.btn, button.buy, button.watch, button.go, button.claim, button.action, button.ad { width:100%; padding:12px; } button.ad { margin-top:10px; }
-    button.buy:disabled, button.go.done, button.watch:disabled, button.pill:disabled { background:#1e3a28; color:#9ed7ae; }
+    .label, .note, .addr { color:var(--muted); } .green { color:var(--green); font-weight:700; }
+    button.btn, button.watch, button.go, button.claim, button.action, button.pill, button.ad { border:0; background:var(--green); color:#06210c; font-weight:800; border-radius:12px; }
+    button.btn, button.watch, button.go, button.claim, button.action, button.ad { width:100%; padding:12px; } button.ad { margin-top:10px; }
+    button.go.done, button.watch:disabled, button.pill:disabled { background:#1e3a28; color:#9ed7ae; }
     .card, .top, .fcard { background:#171c24; border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
     .fcard, .row, .user, .adhead, .bank { display:flex; gap:10px; align-items:center; justify-content:space-between; }
-    .avatar, .ficon { width:42px; height:42px; border-radius:12px; background:#121820; display:flex; align-items:center; justify-content:center; }
-    .avatar { background:var(--green); color:#06210c; font-weight:800; } .grow { flex:1; } .addr { font-size:12px; word-break:break-all; }
+    .avatar { width:42px; height:42px; border-radius:12px; background:var(--green); color:#06210c; font-weight:800; display:flex; align-items:center; justify-content:center; }
+    .grow { flex:1; } .addr { font-size:12px; word-break:break-all; }
     button.pill { border-radius:999px; padding:10px 14px; } .top { display:grid; grid-template-columns:1fr 1fr; } .bank { grid-column:1 / -1; }
     .track, .bar { height:8px; background:#243044; border-radius:99px; overflow:hidden; flex:1; } .fill, .bar i { display:block; height:100%; background:var(--green); }
     .wallet-wrap, .claim-num { text-align:center; } .claim-num { font-size:34px; font-weight:800; }
@@ -67,7 +69,7 @@ const HTML = `<!DOCTYPE html>
     .mark:before { width:44px; height:74px; left:68px; top:36px; } .mark:after { width:32px; height:58px; left:40px; top:58px; transform:rotate(-28deg); } .mark span { width:32px; height:58px; right:40px; top:58px; transform:rotate(28deg); }
     .side { position:absolute; right:0; display:flex; flex-direction:column; gap:8px; } .side button { width:40px; height:40px; border:0; border-radius:50%; background:#2a3646; color:#fff; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .pack { background:#141b24; border:1px solid #2a3948; border-radius:16px; padding:12px; }
-    select, input { width:100%; margin-top:8px; padding:12px; border-radius:12px; border:1px solid var(--line); background:#0f131b; color:var(--text); }
+    select { width:100%; margin-top:8px; padding:12px; border-radius:12px; border:1px solid var(--line); background:#0f131b; color:var(--text); }
     .nav { position:fixed; left:0; right:0; bottom:0; display:flex; background:#0d1218; border-top:1px solid #242424; padding:10px 4px 14px; }
     .nav button { flex:1; background:transparent; border:0; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:14px; font-weight:700; }
     .nav .ico { font-size:26px; line-height:1; } .nav button.on { color:var(--green); }
@@ -133,14 +135,14 @@ const HTML = `<!DOCTYPE html>
     function elapsed(){ return Math.max(0, Date.now()-startedAt); }
     function stopped(){ return elapsed()>=CYCLE; }
     function minedNow(){ return rateNow()*Math.min(elapsed(),CYCLE)/3600000*8; }
-    function renderPacks(){ const start = page*PAGE+1, end = Math.min(MAX, start+PAGE-1); $("page-label").textContent = start+"-"+end; $("packs").innerHTML = ""; for (let n = start; n <= end; n++) { const el = document.createElement("div"); el.className = "pack"+(n===level?" active":""); el.innerHTML = "<b>Level "+n+"</b><div class='green'>+"+rateOf(n).toFixed(5)+" TH/s</div>"; $("packs").appendChild(el); } }
+    function renderPacks(){ const start = page*PAGE+1, end = Math.min(MAX, start+PAGE-1); $("page-label").textContent = start+"-"+end; $("packs").innerHTML = ""; for (let n = start; n <= end; n++) { const el = document.createElement("div"); el.className = "pack"; el.innerHTML = "<b>Level "+n+"</b><div class='green'>+"+rateOf(n).toFixed(5)+" TH/s</div>"; $("packs").appendChild(el); } }
     function paint(){ const off = stopped(), session = minedNow(), appBal = claimed+bonus; $("hashrate").textContent = (off?0:rateNow()).toFixed(5)+" TH/s"; $("rank").textContent = "Level "+level; $("boost-level").textContent = "Level "+level; $("held").textContent = appBal.toFixed(8)+" LUM"; $("mined").textContent = appBal.toFixed(8)+" LUM"; $("bal").textContent = lum.toFixed(4)+" LUM"; $("reward").textContent = "+"+session.toFixed(8); $("status").textContent = off?"Stopped":"Mining"; $("live").textContent = off?"stopped":"live"; $("bank-fill").style.width = Math.min(100, elapsed()/CYCLE*100)+"%"; $("claim").textContent = off?"Claim and restart":"Claim"; $("ad-meta").textContent = ads+"/10"; $("ad-left2").textContent = (10-ads)+" left today"; $("ad-bar").style.width = (ads/10*100)+"%"; $("watch").disabled = ads>=10; applyLang(); }
     load(); setInterval(paint, 1000);
     $("claim").onclick = ()=>{ claimed += minedNow(); startedAt = Date.now(); save(); paint(); };
     $("ad").onclick = ()=>{ adUntil = Date.now()+3600000; save(); paint(); };
     $("watch").onclick = ()=>{ if(ads>=10) return; ads++; bonus += 15; save(); paint(); };
     $("copy-addr").onclick = ()=>navigator.clipboard.writeText(JETTON);
-    $("help").onclick = ()=>alert("Join the channel, come back, and press GO again. Reward is added only if Telegram confirms the join.");
+    $("help").onclick = ()=>alert("Join the channel, come back, and press GO again.");
     document.querySelectorAll(".go").forEach((btn)=>btn.onclick = async ()=>{
       if (btn.classList.contains("done")) return;
       if (btn.id === "task-wallet" && !address) return document.querySelector('[data-page="profile"]').click();
@@ -150,7 +152,8 @@ const HTML = `<!DOCTYPE html>
         btn.textContent = "Checking...";
         await new Promise((r)=>setTimeout(r, 3000));
         try {
-          const res = await fetch("/check-join", { method:"POST", headers:{ "Content-Type":"application/json", "X-Telegram-Init-Data": (window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)||"" }, body: JSON.stringify({ task: btn.dataset.task }) });
+          const initData = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+          const res = await fetch("/check-join", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ task: btn.dataset.task, initData }) });
           const data = await res.json();
           if (!data.ok) { btn.textContent = "Join first"; alert("Join the channel, then press GO again. " + (data.status||data.error||"")); return; }
         } catch (e) { btn.textContent = "GO"; alert("Could not check membership."); return; }
