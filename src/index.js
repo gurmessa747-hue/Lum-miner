@@ -42,121 +42,134 @@ async function telegramUser(initData, token) {
 const HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>LUM Miner</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    :root { --bg:#0c1016; --card:#171c24; --line:#2a3340; --text:#f4f7fb; --muted:#9aa6b5; --green:#2fce4a; }
-    * { box-sizing:border-box; } body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
-    .app { max-width:430px; margin:0 auto; min-height:100vh; padding:14px 14px 96px; }
-    .page { display:none; } .page.on { display:block; } h1 { font-size:28px; margin:4px 0; }
-    .label, .note, .addr { color:var(--muted); } .green { color:var(--green); font-weight:700; }
-    button.btn, button.watch, button.go, button.claim, button.action, button.ad { border:0; background:var(--green); color:#06210c; font-weight:800; border-radius:12px; width:100%; padding:12px; }
-    button.ad { margin-top:10px; } button.go.done, button.watch:disabled { background:#1e3a28; color:#9ed7ae; }
-    .card, .top { background:#171c24; border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
-    .row, .user, .adhead, .bank { display:flex; gap:10px; align-items:center; justify-content:space-between; }
-    .avatar { width:42px; height:42px; border-radius:12px; background:var(--green); color:#06210c; font-weight:800; display:flex; align-items:center; justify-content:center; }
-    .grow { flex:1; } .addr { font-size:12px; word-break:break-all; }
-    .top { display:grid; grid-template-columns:1fr 1fr; } .bank { grid-column:1 / -1; }
-    .track, .bar { height:8px; background:#243044; border-radius:99px; overflow:hidden; flex:1; } .fill, .bar i { display:block; height:100%; background:var(--green); }
-    .wallet-wrap, .claim-num { text-align:center; } .claim-num { font-size:34px; font-weight:800; }
-    .stage { height:230px; display:flex; align-items:center; justify-content:center; }
-    .mark { width:180px; height:180px; border-radius:50%; background:radial-gradient(circle at 50% 42%, #b6ff4a, #39e023 42%, #0b8f12); box-shadow:inset 0 0 0 12px #071208; position:relative; }
-    .mark:before, .mark:after, .mark span { content:""; position:absolute; background:#111; border-radius:40px; }
-    .mark:before { width:44px; height:74px; left:68px; top:36px; } .mark:after { width:32px; height:58px; left:40px; top:58px; transform:rotate(-28deg); } .mark span { width:32px; height:58px; right:40px; top:58px; transform:rotate(28deg); }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .pack { background:#141b24; border:1px solid #2a3948; border-radius:16px; padding:12px; }
-    select { width:100%; margin-top:8px; padding:12px; border-radius:12px; border:1px solid var(--line); background:#0f131b; color:var(--text); }
-    .nav { position:fixed; left:0; right:0; bottom:0; display:flex; background:#0d1218; border-top:1px solid #242424; padding:10px 4px 14px; }
-    .nav button { flex:1; background:transparent; border:0; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:14px; font-weight:700; }
-    .nav .ico { font-size:26px; line-height:1; } .nav button.on { color:var(--green); }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<title>LUM Miner</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
+<style>
+:root{--bg:#0c1016;--card:#171c24;--line:#2a3340;--text:#f4f7fb;--muted:#9aa6b5;--green:#2fce4a}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--text)}
+.app{max-width:430px;margin:0 auto;min-height:100vh;padding:14px 14px 96px}
+.page{display:none}.page.on{display:block}h1{font-size:28px;margin:4px 0}
+.label,.note,.addr{color:var(--muted)}.green{color:var(--green);font-weight:700}
+button.btn,button.watch,button.go,button.claim,button.action,button.ad{border:0;background:var(--green);color:#06210c;font-weight:800;border-radius:12px;width:100%;padding:12px}
+button.ad{margin-top:10px}button.go.done,button.watch:disabled{background:#1e3a28;color:#9ed7ae}
+.card,.top{background:#171c24;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.row,.user,.adhead,.bank{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.avatar{width:42px;height:42px;border-radius:12px;background:var(--green);color:#06210c;font-weight:800;display:flex;align-items:center;justify-content:center}
+.grow{flex:1}.addr{font-size:12px;word-break:break-all}
+.top{display:grid;grid-template-columns:1fr 1fr}.bank{grid-column:1 / -1}
+.track,.bar{height:8px;background:#243044;border-radius:99px;overflow:hidden;flex:1}.fill,.bar i{display:block;height:100%;background:var(--green)}
+.wallet-wrap,.claim-num{text-align:center}.claim-num{font-size:34px;font-weight:800}
+.stage{height:230px;display:flex;align-items:center;justify-content:center}
+.mark{width:180px;height:180px;border-radius:50%;background:radial-gradient(circle at 50% 42%,#b6ff4a,#39e023 42%,#0b8f12);box-shadow:inset 0 0 0 12px #071208;position:relative}
+.mark:before,.mark:after,.mark span{content:"";position:absolute;background:#111;border-radius:40px}
+.mark:before{width:44px;height:74px;left:68px;top:36px}.mark:after{width:32px;height:58px;left:40px;top:58px;transform:rotate(-28deg)}.mark span{width:32px;height:58px;right:40px;top:58px;transform:rotate(28deg)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pack{background:#141b24;border:1px solid #2a3948;border-radius:16px;padding:12px}
+select,input{width:100%;margin-top:8px;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0f131b;color:var(--text)}
+.nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#0d1218;border-top:1px solid #242424;padding:10px 4px 14px}
+.nav button{flex:1;background:transparent;border:0;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:4px;font-size:14px;font-weight:700}
+.nav .ico{font-size:26px;line-height:1}.nav button.on{color:var(--green)}
+</style>
 </head>
 <body>
-  <div class="app">
-    <section id="home" class="page on">
-      <div class="top"><div><div class="label">MINING RATE</div><div id="hashrate">0.00200 TH/s</div></div><div><div class="label">CURRENT RANK</div><div id="rank">Level 1</div></div><div class="bank"><span id="status">Mining</span><div class="track"><div class="fill" id="bank-fill"></div></div><span id="live">live</span></div></div>
-      <div class="wallet-wrap"><b id="held">0.00000000 LUM</b><div class="note">Claimed in app</div></div>
-      <div class="stage"><div class="mark"><span></span></div></div>
-      <div class="claim-num" id="reward">+0.00000000</div>
-      <button class="claim" id="claim">Claim</button>
-      <button class="ad" id="ad">Watch boost +0.0002 TH/s (+1h)</button>
-    </section>
-    <section id="tasks" class="page">
-      <h1>Tasks</h1>
-      <div class="card"><div class="adhead"><b>Watch Ads</b><span class="green" id="ad-meta">0/10</span></div><div class="note" id="ad-left2">10 left today</div><div class="bar"><i id="ad-bar"></i></div><button class="watch" id="watch">Watch Ad (+15 LUM)</button></div>
-      <div class="card"><div class="row"><b>Join LUM Community</b><span class="green">+50 LUM</span></div><button class="go" data-task="community" data-url="https://t.me/lumminercommunity" data-reward="50">GO</button></div>
-      <div class="card"><div class="row"><b>Join LUM payouts</b><span class="green">+50 LUM</span></div><button class="go" data-task="payouts" data-url="https://t.me/lumpayout" data-reward="50">GO</button></div>
-      <div class="card"><div class="row"><b>Share invite</b><span class="green">+50 LUM</span></div><button class="go" id="task-share" data-reward="50">GO</button></div>
-    </section>
-    <section id="boost" class="page">
-      <h1>Boost</h1>
-      <div id="boost-level">Level 1</div>
-      <div class="row" style="margin:10px 0"><button class="btn" id="prev">Prev</button><span id="page-label"></span><button class="btn" id="next">Next</button></div>
-      <div class="grid" id="packs"></div>
-    </section>
-    <section id="friends" class="page">
-      <h1>Friends</h1>
-      <p class="note">1000 LUM per invite, plus 5% of friends mining</p>
-      <div class="card"><b>Your Invite Link</b><div class="addr">https://t.me/lumeonminer_bot?start=ref</div><button class="btn" id="invite">Copy</button></div>
-      <button class="btn" id="share">Share</button>
-    </section>
-    <section id="profile" class="page">
-      <h1>Profile</h1>
-      <div class="card user"><div class="avatar" id="avatar">L</div><div class="grow"><b id="uname">Miner</b><div class="note" id="handle"></div></div></div>
-      <div class="card"><div class="row"><b>Mining Wallet</b><b id="mined">0 LUM</b></div></div>
-      <div class="card"><b>Language</b><select id="lang"><option value="en">English</option><option value="hi">Hindi</option><option value="id">Indonesia</option><option value="ha">Hausa</option></select></div>
-      <div class="addr" id="msg"></div>
-    </section>
-  </div>
-  <nav class="nav">
-    <button class="on" data-page="home"><span class="ico">⛏️</span>Mine</button>
-    <button data-page="tasks"><span class="ico">📋</span>Tasks</button>
-    <button data-page="boost"><span class="ico">⚡</span>Boost</button>
-    <button data-page="friends"><span class="ico">👥</span>Friends</button>
-    <button data-page="profile"><span class="ico">👤</span>Profile</button>
-  </nav>
-  <script>
-    const INVITE = "https://t.me/lumeonminer_bot?start=ref";
-    const BASE = 0.002, STEP = 0.00002, MAX = 1000, PAGE = 20, CYCLE = 4*60*60*1000, KEY = "lum-miner-v2";
-    let ads = 0, level = 1, page = 0, adUntil = 0, bonus = 0, claimed = 0, startedAt = Date.now();
-    const $ = (id) => document.getElementById(id);
-    function load(){ try { const s = JSON.parse(localStorage.getItem(KEY)||"{}"); startedAt = s.startedAt||Date.now(); level = s.level||1; ads = s.ads||0; bonus = s.bonus||0; claimed = s.claimed||0; adUntil = s.adUntil||0; } catch(e){} save(); }
-    function save(){ localStorage.setItem(KEY, JSON.stringify({ startedAt, level, ads, bonus, claimed, adUntil })); }
-    function rateOf(n){ return BASE+(n-1)*STEP; }
-    function rateNow(){ return rateOf(level)+(Date.now()<adUntil?0.0002:0); }
-    function elapsed(){ return Math.max(0, Date.now()-startedAt); }
-    function stopped(){ return elapsed()>=CYCLE; }
-    function minedNow(){ return rateNow()*Math.min(elapsed(),CYCLE)/3600000*8; }
-    function renderPacks(){ const start = page*PAGE+1, end = Math.min(MAX, start+PAGE-1); $("page-label").textContent = start+"-"+end; $("packs").innerHTML = ""; for (let n = start; n <= end; n++) { const el = document.createElement("div"); el.className = "pack"; el.innerHTML = "<b>Level "+n+"</b><div class='green'>+"+rateOf(n).toFixed(5)+" TH/s</div>"; $("packs").appendChild(el); } }
-    function paint(){ try { const off = stopped(), session = minedNow(), appBal = claimed+bonus; $("hashrate").textContent = (off?0:rateNow()).toFixed(5)+" TH/s"; $("rank").textContent = "Level "+level; $("boost-level").textContent = "Level "+level; $("held").textContent = appBal.toFixed(8)+" LUM"; $("mined").textContent = appBal.toFixed(8)+" LUM"; $("reward").textContent = "+"+session.toFixed(8); $("status").textContent = off?"Stopped":"Mining"; $("live").textContent = off?"stopped":"live"; $("bank-fill").style.width = Math.min(100, elapsed()/CYCLE*100)+"%"; $("claim").textContent = off?"Claim and restart":"Claim"; $("ad-meta").textContent = ads+"/10"; $("ad-left2").textContent = (10-ads)+" left today"; $("ad-bar").style.width = (ads/10*100)+"%"; $("watch").disabled = ads>=10; } catch(e){} }
-    load(); setInterval(paint, 1000);
-    $("claim").onclick = ()=>{ claimed += minedNow(); startedAt = Date.now(); save(); paint(); };
-    $("ad").onclick = ()=>{ adUntil = Date.now()+3600000; save(); paint(); };
-    $("watch").onclick = ()=>{ if(ads>=10) return; ads++; bonus += 15; save(); paint(); };
-    document.querySelectorAll(".go").forEach((btn)=>btn.onclick = async ()=>{
-      if (btn.classList.contains("done")) return;
-      if (btn.id === "task-share") { $("share").click(); bonus += 50; btn.classList.add("done"); btn.textContent = "CLAIMED"; save(); paint(); return; }
-      if (btn.dataset.task) {
-        try { if (window.Telegram && Telegram.WebApp) Telegram.WebApp.openTelegramLink(btn.dataset.url); } catch(e){}
-        btn.textContent = "Checking...";
-        await new Promise((r)=>setTimeout(r, 3000));
-        try {
-          const initData = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
-          const res = await fetch("/check-join", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ task: btn.dataset.task, initData }) });
-          const data = await res.json();
-          if (!data.ok) { btn.textContent = "Join first"; alert("Join the channel, then press GO again. " + (data.status||data.error||"")); return; }
-        } catch(e) { btn.textContent = "GO"; alert("Could not check membership."); return; }
-      }
-      bonus += Number(btn.dataset.reward||0); btn.classList.add("done"); btn.textContent = "CLAIMED"; save(); paint();
-    });
-    $("prev").onclick = ()=>{ page = Math.max(0, page-1); renderPacks(); };
-    $("next").onclick = ()=>{ page = Math.min(Math.ceil(MAX/PAGE)-1, page+1); renderPacks(); };
-    $("invite").onclick = async ()=>{ try { await navigator.clipboard.writeText(INVITE); $("invite").textContent = "OK"; } catch(e){} };
-    $("share").onclick = ()=>{ const url = "https://t.me/share/url?url="+encodeURIComponent(INVITE)+"&text="+encodeURIComponent("Mine LUM with me"); try { window.Telegram && Telegram.WebApp ? Telegram.WebApp.openTelegramLink(url) : window.open(url,"_blank"); } catch(e){} };
-    document.querySelectorAll(".nav button").forEach((btn)=>btn.onclick = ()=>{ document.querySelectorAll(".nav button").forEach((b)=>b.classList.remove("on")); document.querySelectorAll(".page").forEach((p)=>p.classList.remove("on")); btn.classList.add("on"); $(btn.dataset.page).classList.add("on"); });
-    try { const u = Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user; if (u) { $("uname").textContent = u.first_name||"Miner"; $("handle").textContent = u.username?"@"+u.username:String(u.id); $("avatar").textContent = (u.first_name||"L").slice(0,1); } Telegram.WebApp.ready(); Telegram.WebApp.expand(); } catch(e){}
-    renderPacks(); paint();
-  </script>
+<div class="app">
+<section id="home" class="page on">
+<div class="top"><div><div class="label">MINING RATE</div><div id="hashrate">0.00200 TH/s</div></div><div><div class="label">CURRENT RANK</div><div id="rank">Level 1</div></div><div class="bank"><span id="status">Mining</span><div class="track"><div class="fill" id="bank-fill"></div></div><span id="live">live</span></div></div>
+<div class="wallet-wrap"><b id="held">0.00000000 LUM</b><div class="note">Claimed in app</div></div>
+<div class="stage"><div class="mark"><span></span></div></div>
+<div class="claim-num" id="reward">+0.00000000</div>
+<button class="claim" id="claim">Claim</button>
+<button class="ad" id="ad">Watch boost +0.0002 TH/s (+1h)</button>
+</section>
+<section id="tasks" class="page">
+<h1>Tasks</h1>
+<div class="card"><div class="adhead"><b>Watch Ads</b><span class="green" id="ad-meta">0/10</span></div><div class="note" id="ad-left2">10 left today</div><div class="bar"><i id="ad-bar"></i></div><button class="watch" id="watch">Watch Ad (+15 LUM)</button></div>
+<div class="card"><div class="row"><b>Join LUM Community</b><span class="green">+50 LUM</span></div><button class="go" data-task="community" data-url="https://t.me/lumminercommunity" data-reward="50">GO</button></div>
+<div class="card"><div class="row"><b>Join LUM payouts</b><span class="green">+50 LUM</span></div><button class="go" data-task="payouts" data-url="https://t.me/lumpayout" data-reward="50">GO</button></div>
+<div class="card"><div class="row"><b>Share invite</b><span class="green">+50 LUM</span></div><button class="go" id="task-share" data-reward="50">GO</button></div>
+</section>
+<section id="boost" class="page">
+<h1>Boost</h1>
+<div id="boost-level">Level 1</div>
+<div class="row" style="margin:10px 0"><button class="btn" id="prev">Prev</button><span id="page-label"></span><button class="btn" id="next">Next</button></div>
+<div class="grid" id="packs"></div>
+</section>
+<section id="friends" class="page">
+<h1>Friends</h1>
+<p class="note">1000 LUM per invite, plus 5% of friends mining</p>
+<div class="card"><b>Your Invite Link</b><div class="addr">https://t.me/lumeonminer_bot?start=ref</div><button class="btn" id="invite">Copy</button></div>
+<div class="card"><div class="row"><b>Your Referrals</b><span id="ref-count">0 qualified</span></div></div>
+<div class="card"><b>Team Wallet</b><div class="note" id="team-wallet">0 LUM from your network</div></div>
+<button class="btn" id="share">Share</button>
+</section>
+<section id="profile" class="page">
+<h1>Profile</h1>
+<div class="card user"><div class="avatar" id="avatar">L</div><div class="grow"><b id="uname">Miner</b><div class="note" id="handle"></div></div></div>
+<div id="ton-connect"></div>
+<div class="card"><div class="row"><b>Holding Wallet</b><b id="bal">0.0000 LUM</b></div><div class="note">On-chain LUM</div></div>
+<div class="card"><div class="row"><b>Mining Wallet</b><b id="mined">0 LUM</b></div></div>
+<div class="card"><b>Withdraw LUM</b><input id="wamount" type="number" min="10000" placeholder="Minimum 10000"/><div class="note">Minimum 10,000 LUM. Fee 1,000 LUM.</div><button class="btn" id="do-withdraw">Request withdrawal</button></div>
+<div class="card"><b>Language</b><select id="lang"><option value="en">English</option><option value="hi">Hindi</option><option value="id">Indonesia</option><option value="ha">Hausa</option></select></div>
+<div class="addr" id="msg"></div>
+</section>
+</div>
+<nav class="nav">
+<button class="on" data-page="home"><span class="ico">⛏️</span>Mine</button>
+<button data-page="tasks"><span class="ico">📋</span>Tasks</button>
+<button data-page="boost"><span class="ico">⚡</span>Boost</button>
+<button data-page="friends"><span class="ico">👥</span>Friends</button>
+<button data-page="profile"><span class="ico">👤</span>Profile</button>
+</nav>
+<script>
+const JETTON="EQCuTahLfZSKRGP4GF02yPMnFAq-bT1XJU4Z8V1DH_5sWlmw", INVITE="https://t.me/lumeonminer_bot?start=ref";
+const BASE=0.002, STEP=0.00002, MAX=1000, PAGE=20, CYCLE=4*60*60*1000, KEY="lum-miner-v2", FEE=1000, MINW=10000;
+let lum=0, address="", ads=0, level=1, page=0, refs=0, adUntil=0, bonus=0, claimed=0, startedAt=Date.now(), history=[];
+const $=id=>document.getElementById(id);
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY)||"{}"); startedAt=s.startedAt||Date.now(); level=s.level||1; ads=s.ads||0; bonus=s.bonus||0; claimed=s.claimed||0; adUntil=s.adUntil||0; refs=s.refs||0; history=s.history||[];}catch(e){} save();}
+function save(){localStorage.setItem(KEY, JSON.stringify({startedAt,level,ads,bonus,claimed,adUntil,refs,history}));}
+function rateOf(n){return BASE+(n-1)*STEP;}
+function rateNow(){return rateOf(level)+(Date.now()<adUntil?0.0002:0);}
+function elapsed(){return Math.max(0, Date.now()-startedAt);}
+function stopped(){return elapsed()>=CYCLE;}
+function minedNow(){return rateNow()*Math.min(elapsed(),CYCLE)/3600000*8;}
+function renderPacks(){const start=page*PAGE+1, end=Math.min(MAX,start+PAGE-1); $("page-label").textContent=start+"-"+end; $("packs").innerHTML=""; for(let n=start;n<=end;n++){const el=document.createElement("div"); el.className="pack"; el.innerHTML="<b>Level "+n+"</b><div class='green'>+"+rateOf(n).toFixed(5)+" TH/s</div>"; $("packs").appendChild(el);}}
+function paint(){try{const off=stopped(), session=minedNow(), appBal=claimed+bonus; $("hashrate").textContent=(off?0:rateNow()).toFixed(5)+" TH/s"; $("rank").textContent="Level "+level; $("boost-level").textContent="Level "+level; $("held").textContent=appBal.toFixed(8)+" LUM"; $("mined").textContent=appBal.toFixed(8)+" LUM"; $("bal").textContent=lum.toFixed(4)+" LUM"; $("reward").textContent="+"+session.toFixed(8); $("status").textContent=off?"Stopped":"Mining"; $("live").textContent=off?"stopped":"live"; $("bank-fill").style.width=Math.min(100,elapsed()/CYCLE*100)+"%"; $("claim").textContent=off?"Claim and restart":"Claim"; $("ad-meta").textContent=ads+"/10"; $("ad-left2").textContent=(10-ads)+" left today"; $("ad-bar").style.width=(ads/10*100)+"%"; $("watch").disabled=ads>=10; $("ref-count").textContent=refs+" qualified"; $("team-wallet").textContent=(refs*1000).toFixed(2)+" LUM from your network";}catch(e){}}
+load(); setInterval(paint,1000);
+$("claim").onclick=()=>{claimed+=minedNow(); startedAt=Date.now(); save(); paint();};
+$("ad").onclick=()=>{adUntil=Date.now()+3600000; save(); paint();};
+$("watch").onclick=()=>{if(ads>=10)return; ads++; bonus+=15; save(); paint();};
+document.querySelectorAll(".go").forEach(btn=>btn.onclick=async()=>{
+ if(btn.classList.contains("done"))return;
+ if(btn.id==="task-share"){$("share").click(); bonus+=50; btn.classList.add("done"); btn.textContent="CLAIMED"; save(); paint(); return;}
+ if(btn.dataset.task){
+  try{if(window.Telegram&&Telegram.WebApp)Telegram.WebApp.openTelegramLink(btn.dataset.url);}catch(e){}
+  btn.textContent="Checking...";
+  await new Promise(r=>setTimeout(r,3000));
+  try{
+   const initData=(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)||"";
+   const res=await fetch("/check-join",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:btn.dataset.task,initData})});
+   const data=await res.json();
+   if(!data.ok){btn.textContent="Join first"; alert("Join the channel, then press GO again. "+(data.status||data.error||"")); return;}
+  }catch(e){btn.textContent="GO"; alert("Could not check membership."); return;}
+ }
+ bonus+=Number(btn.dataset.reward||0); btn.classList.add("done"); btn.textContent="CLAIMED"; save(); paint();
+});
+$("prev").onclick=()=>{page=Math.max(0,page-1); renderPacks();};
+$("next").onclick=()=>{page=Math.min(Math.ceil(MAX/PAGE)-1,page+1); renderPacks();};
+$("invite").onclick=async()=>{try{await navigator.clipboard.writeText(INVITE); $("invite").textContent="OK";}catch(e){}};
+$("share").onclick=()=>{const url="https://t.me/share/url?url="+encodeURIComponent(INVITE)+"&text="+encodeURIComponent("Mine LUM with me"); try{window.Telegram&&Telegram.WebApp?Telegram.WebApp.openTelegramLink(url):window.open(url,"_blank");}catch(e){}};
+$("do-withdraw").onclick=()=>{const amount=Number($("wamount").value), purse=claimed+bonus; if(amount<MINW){$("msg").textContent="Minimum is 10000 LUM"; return;} if(purse<amount){$("msg").textContent="Not enough claimed balance"; return;} if(bonus>=amount)bonus-=amount; else {claimed-=(amount-bonus); bonus=0;} history.unshift((amount-FEE)+" LUM requested, fee "+FEE); $("msg").textContent="Request saved. Not sent on-chain yet."; save(); paint();};
+document.querySelectorAll(".nav button").forEach(btn=>btn.onclick=()=>{document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("on")); document.querySelectorAll(".page").forEach(p=>p.classList.remove("on")); btn.classList.add("on"); $(btn.dataset.page).classList.add("on");});
+try{const u=Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.user; if(u){$("uname").textContent=u.first_name||"Miner"; $("handle").textContent=u.username?"@"+u.username:String(u.id); $("avatar").textContent=(u.first_name||"L").slice(0,1);} Telegram.WebApp.ready(); Telegram.WebApp.expand();}catch(e){}
+try{
+ const ui=new TON_CONNECT_UI.TonConnectUI({manifestUrl:"https://lum-miner.gurmessa747.workers.dev/tonconnect-manifest.json"});
+ const wbtn=document.createElement("button"); wbtn.className="action"; wbtn.textContent="Connect Wallet"; wbtn.onclick=()=>ui.openModal();
+ $("ton-connect").appendChild(wbtn);
+ ui.onStatusChange(async wallet=>{address=wallet&&wallet.account?wallet.account.address:""; wbtn.textContent=address?"Wallet connected":"Connect Wallet"; if(!address){lum=0; paint(); return;} try{const res=await fetch("https://tonapi.io/v2/accounts/"+encodeURIComponent(address)+"/jettons/"+encodeURIComponent(JETTON)); const data=await res.json(); lum=Number(data.balance||"0")/Math.pow(10,(data.jetton&&data.jetton.decimals)||9);}catch(e){$("msg").textContent="Could not read LUM balance";} paint();});
+}catch(e){}
+renderPacks(); paint();
+</script>
 </body>
 </html>`;
