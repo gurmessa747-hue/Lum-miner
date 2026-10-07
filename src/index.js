@@ -1,4 +1,6 @@
 const CHANNELS = { community: "@lumminercommunity", payouts: "@lumpayout" };
+const MIN_WITHDRAW = 300;
+const WITHDRAW_FEE = 50;
 
 export default {
   async fetch(request, env) {
@@ -68,7 +70,7 @@ async function withdraw(request, env) {
   const amount = Number(body.amount);
   const wallet = String(body.wallet || "");
   if (!wallet) return Response.json({ ok: false, error: "Connect wallet first" }, { status: 400 });
-  if (!Number.isFinite(amount) || amount < 10000) return Response.json({ ok: false, error: "Minimum is 10000" }, { status: 400 });
+  if (!Number.isFinite(amount) || amount < MIN_WITHDRAW) return Response.json({ ok: false, error: "Minimum is 300" }, { status: 400 });
   const key = "wd:" + user.id;
   const data = await env.REFERRALS.get(key, "json") || { items: [] };
   if (data.items.some((x) => x.status === "pending")) return Response.json({ ok: false, error: "You already have a pending request" }, { status: 400 });
@@ -78,8 +80,8 @@ async function withdraw(request, env) {
     name: user.username ? "@" + user.username : user.first_name || String(user.id),
     wallet,
     gross: amount,
-    fee: 1000,
-    net: amount - 1000,
+    fee: WITHDRAW_FEE,
+    net: amount - WITHDRAW_FEE,
     status: "pending",
     at: new Date().toISOString()
   };
@@ -94,7 +96,7 @@ async function withdraw(request, env) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: env.ADMIN_ID,
-        text: "LUM withdraw\n" + item.name + "\n" + item.wallet + "\nsend " + item.net + " LUM\nid " + item.id
+        text: "LUM withdraw\n" + item.name + "\n" + item.wallet + "\nsend " + item.net + " LUM\nfee " + item.fee + "\nid " + item.id
       })
     });
   }
@@ -115,10 +117,7 @@ async function adminWithdrawals(request, env) {
     await env.REFERRALS.put("wd:all", JSON.stringify(all));
     const userData = await env.REFERRALS.get("wd:" + item.userId, "json") || { items: [] };
     const mine = userData.items.find((x) => x.id === item.id);
-    if (mine) {
-      mine.status = "paid";
-      mine.tx = item.tx;
-    }
+    if (mine) { mine.status = "paid"; mine.tx = item.tx; }
     await env.REFERRALS.put("wd:" + item.userId, JSON.stringify(userData));
     return Response.json({ ok: true });
   }
@@ -151,4 +150,4 @@ async function telegramUser(initData, token) {
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
   if (hex !== hash) return null;
   return JSON.parse(params.get("user") || "null");
-}
+                                }
