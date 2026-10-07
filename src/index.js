@@ -8,6 +8,7 @@ export default {
     if (url.pathname === "/check-join" && request.method === "POST") return checkJoin(request, env);
     if (url.pathname === "/referral") return referral(request, env);
     if (url.pathname === "/withdraw") return withdraw(request, env);
+    if (url.pathname === "/admin") return adminPage(request, env);
     if (url.pathname === "/admin/withdrawals") return adminWithdrawals(request, env);
     if (url.pathname === "/tonconnect-manifest.json") {
       return Response.json({ url: "https://lum-miner.gurmessa747.workers.dev", name: "LUM Miner", iconUrl: "https://ton.org/download/ton_symbol.png" });
@@ -40,6 +41,39 @@ function toFriendly(address) {
   full[34] = (crc >> 8) & 0xff;
   full[35] = crc & 0xff;
   return btoa(String.fromCharCode(...full)).replaceAll("+", "-").replaceAll("/", "_");
+}
+
+async function markPaid(env, all, id) {
+  const item = all.find((x) => x.id === id);
+  if (!item) return false;
+  item.status = "paid";
+  await env.REFERRALS.put("wd:all", JSON.stringify(all));
+  const userData = await env.REFERRALS.get("wd:" + item.userId, "json") || { items: [] };
+  const mine = userData.items.find((x) => x.id === item.id);
+  if (mine) mine.status = "paid";
+  await env.REFERRALS.put("wd:" + item.userId, JSON.stringify(userData));
+  return true;
+}
+
+async function adminPage(request, env) {
+  if (!env.REFERRALS) return new Response("KV missing", { status: 500 });
+  const url = new URL(request.url);
+  if (String(url.searchParams.get("key")) !== String(env.ADMIN_ID)) return new Response("no", { status: 401 });
+  const key = url.searchParams.get("key");
+  const all = await env.REFERRALS.get("wd:all", "json") || [];
+  const paidId = url.searchParams.get("paid");
+  if (paidId) {
+    await markPaid(env, all, paidId);
+    return Response.redirect(url.origin + "/admin?key=" + encodeURIComponent(key), 302);
+  }
+  const rows = all.map((x) => {
+    const button = x.status === "pending"
+      ? "<a href='/admin?key=" + encodeURIComponent(key) + "&paid=" + x.id + "'>Mark paid</a>"
+      : x.status;
+    return "<div class='card'><b>" + x.name + "</b><div class='addr'>" + x.wallet + "</div><div>send " + x.net + " LUM · fee " + x.fee + "</div><div>" + button + "</div></div>";
+  }).join("") || "<p>No requests</p>";
+  const html = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:system-ui;background:#0c1016;color:#fff;padding:16px}a{display:block;background:#2f80ed;color:#fff;text-align:center;padding:12px;border-radius:12px;text-decoration:none;margin-top:8px}.card{border:1px solid #2a3340;border-radius:12px;padding:12px;margin:10px 0}.addr{word-break:break-all;color:#9aa6b5}</style><h1>LUM payouts</h1>" + rows;
+  return new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } });
 }
 
 async function referral(request, env) {
@@ -134,18 +168,15 @@ async function adminWithdrawals(request, env) {
   const url = new URL(request.url);
   if (String(url.searchParams.get("key")) !== String(env.ADMIN_ID)) return new Response("no", { status: 401 });
   const all = await env.REFERRALS.get("wd:all", "json") || [];
+  const paidId = url.searchParams.get("paid");
+  if (paidId) {
+    const ok = await markPaid(env, all, paidId);
+    return Response.json({ ok });
+  }
   if (request.method === "POST") {
     const body = await request.json().catch(() => ({}));
-    const item = all.find((x) => x.id === body.id);
-    if (!item) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
-    item.status = "paid";
-    item.tx = body.tx || "";
-    await env.REFERRALS.put("wd:all", JSON.stringify(all));
-    const userData = await env.REFERRALS.get("wd:" + item.userId, "json") || { items: [] };
-    const mine = userData.items.find((x) => x.id === item.id);
-    if (mine) { mine.status = "paid"; mine.tx = item.tx; }
-    await env.REFERRALS.put("wd:" + item.userId, JSON.stringify(userData));
-    return Response.json({ ok: true });
+    const ok = await markPaid(env, all, body.id);
+    return Response.json({ ok });
   }
   return Response.json(all);
 }
@@ -176,4 +207,4 @@ async function telegramUser(initData, token) {
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
   if (hex !== hash) return null;
   return JSON.parse(params.get("user") || "null");
-                        }
+    }
