@@ -1,6 +1,6 @@
 const CHANNELS = { community: "@lumminercommunity", payouts: "@lumpayout" };
-const MIN_WITHDRAW = 300;
-const WITHDRAW_FEE = 50;
+const MIN_WITHDRAW = 10000;
+const WITHDRAW_FEE = 1000;
 
 export default {
   async fetch(request, env) {
@@ -69,10 +69,10 @@ async function adminPage(request, env) {
   const rows = all.map((x) => {
     const button = x.status === "pending"
       ? "<a href='/admin?key=" + encodeURIComponent(key) + "&paid=" + x.id + "'>Mark paid</a>"
-      : x.status;
-    return "<div class='card'><b>" + x.name + "</b><div class='addr'>" + x.wallet + "</div><div>send " + x.net + " LUM · fee " + x.fee + "</div><div>" + button + "</div></div>";
+      : "<span class='ok'>" + x.status + "</span>";
+    return "<div class='card'><b>" + x.name + "</b> <span class='ok'>ID " + x.userId + "</span><div class='addr'>" + x.wallet + "</div><div>send " + x.net + " LUM · fee " + x.fee + "</div><div>" + button + "</div></div>";
   }).join("") || "<p>No requests</p>";
-  const html = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:system-ui;background:#0c1016;color:#fff;padding:16px}a{display:block;background:#2f80ed;color:#fff;text-align:center;padding:12px;border-radius:12px;text-decoration:none;margin-top:8px}.card{border:1px solid #2a3340;border-radius:12px;padding:12px;margin:10px 0}.addr{word-break:break-all;color:#9aa6b5}</style><h1>LUM payouts</h1>" + rows;
+  const html = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:system-ui;background:#0c1016;color:#fff;padding:16px}a{display:block;background:#2f80ed;color:#fff;text-align:center;padding:12px;border-radius:12px;text-decoration:none;margin-top:8px}.card{border:1px solid #2a3340;border-radius:12px;padding:12px;margin:10px 0}.addr{word-break:break-all;color:#9aa6b5}.ok{color:#2fce4a;font-weight:700}</style><h1>LUM payouts</h1>" + rows;
   return new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } });
 }
 
@@ -130,7 +130,7 @@ async function withdraw(request, env) {
   const amount = Number(body.amount);
   const wallet = toFriendly(body.wallet || "");
   if (!wallet) return Response.json({ ok: false, error: "Connect wallet first" }, { status: 400 });
-  if (!Number.isFinite(amount) || amount < MIN_WITHDRAW) return Response.json({ ok: false, error: "Minimum is 300" }, { status: 400 });
+  if (!Number.isFinite(amount) || amount < MIN_WITHDRAW) return Response.json({ ok: false, error: "Insufficient balance" }, { status: 400 });
   const key = "wd:" + user.id;
   const data = await env.REFERRALS.get(key, "json") || { items: [] };
   if (data.items.some((x) => x.status === "pending")) return Response.json({ ok: false, error: "You already have a pending request" }, { status: 400 });
@@ -156,7 +156,7 @@ async function withdraw(request, env) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: env.ADMIN_ID,
-        text: "LUM withdraw\n" + item.name + "\n" + item.wallet + "\nsend " + item.net + " LUM\nfee " + item.fee + "\nid " + item.id
+        text: "LUM withdraw\n" + item.name + "\nID " + item.userId + "\n" + item.wallet + "\nsend " + item.net + " LUM\nfee " + item.fee + "\nid " + item.id
       })
     });
   }
@@ -169,14 +169,10 @@ async function adminWithdrawals(request, env) {
   if (String(url.searchParams.get("key")) !== String(env.ADMIN_ID)) return new Response("no", { status: 401 });
   const all = await env.REFERRALS.get("wd:all", "json") || [];
   const paidId = url.searchParams.get("paid");
-  if (paidId) {
-    const ok = await markPaid(env, all, paidId);
-    return Response.json({ ok });
-  }
+  if (paidId) return Response.json({ ok: await markPaid(env, all, paidId) });
   if (request.method === "POST") {
     const body = await request.json().catch(() => ({}));
-    const ok = await markPaid(env, all, body.id);
-    return Response.json({ ok });
+    return Response.json({ ok: await markPaid(env, all, body.id) });
   }
   return Response.json(all);
 }
