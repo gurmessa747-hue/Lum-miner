@@ -16,6 +16,32 @@ export default {
   }
 };
 
+function crc16(bytes) {
+  let reg = 0;
+  for (const b of bytes) {
+    reg ^= b << 8;
+    for (let i = 0; i < 8; i++) reg = (reg & 0x8000) ? ((reg << 1) ^ 0x1021) & 0xffff : (reg << 1) & 0xffff;
+  }
+  return reg;
+}
+
+function toFriendly(address) {
+  const raw = String(address || "");
+  if (!raw.includes(":")) return raw;
+  const [wc, hex] = raw.split(":");
+  if (!hex || hex.length !== 64) return raw;
+  const body = new Uint8Array(34);
+  body[0] = 0x11;
+  body[1] = Number(wc) & 0xff;
+  for (let i = 0; i < 32; i++) body[2 + i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  const crc = crc16(body);
+  const full = new Uint8Array(36);
+  full.set(body);
+  full[34] = (crc >> 8) & 0xff;
+  full[35] = crc & 0xff;
+  return btoa(String.fromCharCode(...full)).replaceAll("+", "-").replaceAll("/", "_");
+}
+
 async function referral(request, env) {
   if (!env.REFERRALS) return Response.json({ ok: false, error: "REFERRALS KV is missing" }, { status: 500 });
   const url = new URL(request.url);
@@ -68,7 +94,7 @@ async function withdraw(request, env) {
   const user = await telegramUser(body.initData || "", env.BOT_TOKEN);
   if (!user) return Response.json({ ok: false, error: "Open this inside Telegram" }, { status: 401 });
   const amount = Number(body.amount);
-  const wallet = String(body.wallet || "");
+  const wallet = toFriendly(body.wallet || "");
   if (!wallet) return Response.json({ ok: false, error: "Connect wallet first" }, { status: 400 });
   if (!Number.isFinite(amount) || amount < MIN_WITHDRAW) return Response.json({ ok: false, error: "Minimum is 300" }, { status: 400 });
   const key = "wd:" + user.id;
@@ -150,4 +176,4 @@ async function telegramUser(initData, token) {
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
   if (hex !== hash) return null;
   return JSON.parse(params.get("user") || "null");
-                                }
+                        }
