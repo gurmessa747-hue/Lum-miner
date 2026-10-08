@@ -9,11 +9,11 @@ export default {
 };
 
 async function read(env, key) {
-  const raw = await env.LUM_KV.get(key);
+  const raw = await env.REFERRALS.get(key);
   return raw ? JSON.parse(raw) : null;
 }
 async function write(env, key, value) {
-  await env.LUM_KV.put(key, JSON.stringify(value));
+  await env.REFERRALS.put(key, JSON.stringify(value));
 }
 function userFrom(initData) {
   try { return JSON.parse(new URLSearchParams(initData || "").get("user") || "{}"); }
@@ -75,4 +75,4 @@ async function handleWithdraw(request, env) {
   row.items.unshift({ net: amount - 1000, status: "pending", wallet: body.wallet || "" });
   await write(env, "wd:" + id, row);
   return Response.json({ ok: true, items: row.items });
-      }
+}
