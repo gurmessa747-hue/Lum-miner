@@ -1,12 +1,16 @@
 const CHANNELS = { community: "@lumminercommunity", payouts: "@lumpayout" };
 const MIN_WITHDRAW = 10000;
 const WITHDRAW_FEE = 1000;
+const CYCLE = 4 * 60 * 60 * 1000;
+const TOP = 5000000;
+const RATIO = Math.pow(TOP / 40, 1 / 99);
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/check-join" && request.method === "POST") return checkJoin(request, env);
     if (url.pathname === "/referral") return referral(request, env);
+    if (url.pathname === "/mine") return mine(request, env);
     if (url.pathname === "/withdraw") return withdraw(request, env);
     if (url.pathname === "/admin") return adminPage(request, env);
     if (url.pathname === "/admin/withdrawals") return adminWithdrawals(request, env);
@@ -17,6 +21,17 @@ export default {
   }
 };
 
+function costOf(n) { if (n <= 1) return 0; if (n >= 100) return TOP; return Math.round(40 * Math.pow(RATIO, n - 1)); }
+function levelFromBalance(amount) { let best = 1; for (let n = 2; n <= 100; n++) { if (costOf(n) <= amount) best = n; else break; } return best; }
+function stepAt(n) { if (n <= 20) return 0.1; if (n <= 40) return 0.2; if (n <= 60) return 0.3; if (n <= 80) return 0.4; return 1; }
+function rateOf(n) { let rate = 1; for (let i = 2; i <= n; i++) rate += stepAt(i); return Math.round(rate * 100) / 100; }
+function sessionOf(state) {
+  const elapsed = Math.max(0, Date.now() - (state.startedAt || Date.now()));
+  const rate = rateOf(levelFromBalance((state.claimed || 0) + (state.bonus || 0)));
+  return rate * Math.min(elapsed, CYCLE) / 3600000 * 8;
+}
+function purse(state) { return (state.claimed || 0) + (state.bonus || 0); }
+
 function crc16(bytes) {
   let reg = 0;
   for (const b of bytes) {
@@ -25,7 +40,6 @@ function crc16(bytes) {
   }
   return reg;
 }
-
 function toFriendly(address) {
   const raw = String(address || "");
   if (!raw.includes(":")) return raw;
@@ -43,14 +57,46 @@ function toFriendly(address) {
   return btoa(String.fromCharCode(...full)).replaceAll("+", "-").replaceAll("/", "_");
 }
 
+async function mine(request, env) {
+  if (!env.REFERRALS) return Response.json({ ok: false, error: "KV missing" }, { status: 500 });
+  const body = await request.json().catch(() => ({}));
+  const user = await telegramUser(body.initData || "", env.BOT_TOKEN);
+  if (!user) return Response.json({ ok: false, error: "Open this inside Telegram" }, { status: 401 });
+  const key = "bal:" + user.id;
+  const state = await env.REFERRALS.get(key, "json") || { claimed: 0, bonus: 0, startedAt: Date.now(), ads: 0, adDay: "", doneTasks: [] };
+  const today = new Date().toISOString().slice(0, 10);
+  if (state.adDay !== today) { state.ads = 0; state.adDay = today; }
+  if (body.action === "claim") {
+    state.claimed = (state.claimed || 0) + sessionOf(state);
+    state.startedAt = Date.now();
+  }
+  if (body.action === "ad") {
+    if (state.ads >= 10) return Response.json({ ok: false, error: "Ad limit reached" }, { status: 400 });
+    state.ads += 1;
+    state.bonus = (state.bonus || 0) + 15;
+  }
+  if (body.action === "task" && CHANNELS[body.task] && !(state.doneTasks || []).includes(body.task)) {
+    state.doneTasks = state.doneTasks || [];
+    state.doneTasks.push(body.task);
+    state.bonus = (state.bonus || 0) + 50;
+  }
+  if (body.action === "referral") {
+    const paid = Number(body.paid || 0);
+    if (paid > 0 && paid <= 100) state.bonus = (state.bonus || 0) + paid * 1000;
+  }
+  await env.REFERRALS.put(key, JSON.stringify(state));
+  const level = levelFromBalance(purse(state));
+  return Response.json({ ok: true, balance: purse(state), session: sessionOf(state), rate: rateOf(level), level, ads: state.ads, doneTasks: state.doneTasks || [], startedAt: state.startedAt });
+}
+
 async function markPaid(env, all, id) {
   const item = all.find((x) => x.id === id);
   if (!item) return false;
   item.status = "paid";
   await env.REFERRALS.put("wd:all", JSON.stringify(all));
   const userData = await env.REFERRALS.get("wd:" + item.userId, "json") || { items: [] };
-  const mine = userData.items.find((x) => x.id === item.id);
-  if (mine) mine.status = "paid";
+  const mineItem = userData.items.find((x) => x.id === item.id);
+  if (mineItem) mineItem.status = "paid";
   await env.REFERRALS.put("wd:" + item.userId, JSON.stringify(userData));
   return true;
 }
@@ -67,9 +113,7 @@ async function adminPage(request, env) {
     return Response.redirect(url.origin + "/admin?key=" + encodeURIComponent(key), 302);
   }
   const rows = all.map((x) => {
-    const button = x.status === "pending"
-      ? "<a href='/admin?key=" + encodeURIComponent(key) + "&paid=" + x.id + "'>Mark paid</a>"
-      : "<span class='ok'>" + x.status + "</span>";
+    const button = x.status === "pending" ? "<a href='/admin?key=" + encodeURIComponent(key) + "&paid=" + x.id + "'>Mark paid</a>" : "<span class='ok'>" + x.status + "</span>";
     return "<div class='card'><b>" + x.name + "</b> <span class='ok'>ID " + x.userId + "</span><div class='addr'>" + x.wallet + "</div><div>send " + x.net + " LUM · fee " + x.fee + "</div><div>" + button + "</div></div>";
   }).join("") || "<p>No requests</p>";
   const html = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:system-ui;background:#0c1016;color:#fff;padding:16px}a{display:block;background:#2f80ed;color:#fff;text-align:center;padding:12px;border-radius:12px;text-decoration:none;margin-top:8px}.card{border:1px solid #2a3340;border-radius:12px;padding:12px;margin:10px 0}.addr{word-break:break-all;color:#9aa6b5}.ok{color:#2fce4a;font-weight:700}</style><h1>LUM payouts</h1>" + rows;
@@ -130,21 +174,17 @@ async function withdraw(request, env) {
   const amount = Number(body.amount);
   const wallet = toFriendly(body.wallet || "");
   if (!wallet) return Response.json({ ok: false, error: "Connect wallet first" }, { status: 400 });
-  if (!Number.isFinite(amount) || amount < MIN_WITHDRAW) return Response.json({ ok: false, error: "Insufficient balance" }, { status: 400 });
+  const state = await env.REFERRALS.get("bal:" + user.id, "json") || { claimed: 0, bonus: 0 };
+  if (!Number.isFinite(amount) || amount < MIN_WITHDRAW || purse(state) < amount) return Response.json({ ok: false, error: "Insufficient balance" }, { status: 400 });
   const key = "wd:" + user.id;
   const data = await env.REFERRALS.get(key, "json") || { items: [] };
   if (data.items.some((x) => x.status === "pending")) return Response.json({ ok: false, error: "You already have a pending request" }, { status: 400 });
-  const item = {
-    id: Date.now().toString(),
-    userId: user.id,
-    name: user.username ? "@" + user.username : user.first_name || String(user.id),
-    wallet,
-    gross: amount,
-    fee: WITHDRAW_FEE,
-    net: amount - WITHDRAW_FEE,
-    status: "pending",
-    at: new Date().toISOString()
-  };
+  state.bonus = state.bonus || 0;
+  state.claimed = state.claimed || 0;
+  if (state.bonus >= amount) state.bonus -= amount;
+  else { state.claimed -= (amount - state.bonus); state.bonus = 0; }
+  await env.REFERRALS.put("bal:" + user.id, JSON.stringify(state));
+  const item = { id: Date.now().toString(), userId: user.id, name: user.username ? "@" + user.username : user.first_name || String(user.id), wallet, gross: amount, fee: WITHDRAW_FEE, net: amount - WITHDRAW_FEE, status: "pending", at: new Date().toISOString() };
   data.items.unshift(item);
   await env.REFERRALS.put(key, JSON.stringify(data));
   const all = await env.REFERRALS.get("wd:all", "json") || [];
@@ -152,15 +192,11 @@ async function withdraw(request, env) {
   await env.REFERRALS.put("wd:all", JSON.stringify(all.slice(0, 200)));
   if (env.BOT_TOKEN && env.ADMIN_ID) {
     await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/sendMessage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: env.ADMIN_ID,
-        text: "LUM withdraw\n" + item.name + "\nID " + item.userId + "\n" + item.wallet + "\nsend " + item.net + " LUM\nfee " + item.fee + "\nid " + item.id
-      })
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: env.ADMIN_ID, text: "LUM withdraw\n" + item.name + "\nID " + item.userId + "\n" + item.wallet + "\nsend " + item.net + " LUM\nfee " + item.fee + "\nid " + item.id })
     });
   }
-  return Response.json({ ok: true, item, items: data.items });
+  return Response.json({ ok: true, item, items: data.items, balance: purse(state) });
 }
 
 async function adminWithdrawals(request, env) {
@@ -203,4 +239,4 @@ async function telegramUser(initData, token) {
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
   if (hex !== hash) return null;
   return JSON.parse(params.get("user") || "null");
-    }
+  }
