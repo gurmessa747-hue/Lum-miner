@@ -23,14 +23,14 @@ export default {
 
 function costOf(n) { if (n <= 1) return 0; if (n >= 100) return TOP; return Math.round(40 * Math.pow(RATIO, n - 1)); }
 function levelFromBalance(amount) { let best = 1; for (let n = 2; n <= 100; n++) { if (costOf(n) <= amount) best = n; else break; } return best; }
-function stepAt(n) { if (n <= 20) return 0.1; if (n <= 40) return 0.2; if (n <= 60) return 0.3; if (n <= 80) return 0.4; return 1; }
-function rateOf(n) { let rate = 1; for (let i = 2; i <= n; i++) rate += stepAt(i); return Math.round(rate * 100) / 100; }
+function stepAt(n) { if (n <= 20) return 0.05; if (n <= 40) return 0.1; if (n <= 60) return 0.2; if (n <= 80) return 0.3; return 0.4; }
+function rateOf(n) { let rate = 0.5; for (let i = 2; i <= n; i++) rate += stepAt(i); return Math.round(rate * 100) / 100; }
+function purse(state) { return (state.claimed || 0) + (state.bonus || 0); }
+function rateNow(state) { return rateOf(levelFromBalance(purse(state))) + (Date.now() < (state.adUntil || 0) ? 1 : 0); }
 function sessionOf(state) {
   const elapsed = Math.max(0, Date.now() - (state.startedAt || Date.now()));
-  const rate = rateOf(levelFromBalance((state.claimed || 0) + (state.bonus || 0)));
-  return rate * Math.min(elapsed, CYCLE) / 3600000 * 8;
+  return rateNow(state) * Math.min(elapsed, CYCLE) / 3600000 * 8;
 }
-function purse(state) { return (state.claimed || 0) + (state.bonus || 0); }
 
 function crc16(bytes) {
   let reg = 0;
@@ -63,13 +63,14 @@ async function mine(request, env) {
   const user = await telegramUser(body.initData || "", env.BOT_TOKEN);
   if (!user) return Response.json({ ok: false, error: "Open this inside Telegram" }, { status: 401 });
   const key = "bal:" + user.id;
-  const state = await env.REFERRALS.get(key, "json") || { claimed: 0, bonus: 0, startedAt: Date.now(), ads: 0, adDay: "", doneTasks: [] };
+  const state = await env.REFERRALS.get(key, "json") || { claimed: 0, bonus: 0, startedAt: Date.now(), ads: 0, adDay: "", adUntil: 0, doneTasks: [] };
   const today = new Date().toISOString().slice(0, 10);
   if (state.adDay !== today) { state.ads = 0; state.adDay = today; }
   if (body.action === "claim") {
     state.claimed = (state.claimed || 0) + sessionOf(state);
     state.startedAt = Date.now();
   }
+  if (body.action === "boost") state.adUntil = Date.now() + 2 * 60 * 60 * 1000;
   if (body.action === "ad") {
     if (state.ads >= 10) return Response.json({ ok: false, error: "Ad limit reached" }, { status: 400 });
     state.ads += 1;
@@ -86,7 +87,7 @@ async function mine(request, env) {
   }
   await env.REFERRALS.put(key, JSON.stringify(state));
   const level = levelFromBalance(purse(state));
-  return Response.json({ ok: true, balance: purse(state), session: sessionOf(state), rate: rateOf(level), level, ads: state.ads, doneTasks: state.doneTasks || [], startedAt: state.startedAt });
+  return Response.json({ ok: true, balance: purse(state), session: sessionOf(state), rate: rateNow(state), level, ads: state.ads, adUntil: state.adUntil || 0, doneTasks: state.doneTasks || [], startedAt: state.startedAt });
 }
 
 async function markPaid(env, all, id) {
@@ -123,10 +124,7 @@ async function adminPage(request, env) {
 async function referral(request, env) {
   if (!env.REFERRALS) return Response.json({ ok: false, error: "REFERRALS KV is missing" }, { status: 500 });
   const url = new URL(request.url);
-  if (request.method === "GET") {
-    const data = await env.REFERRALS.get("user:" + url.searchParams.get("id"), "json") || { friends: [] };
-    return Response.json(data);
-  }
+  if (request.method === "GET") return Response.json(await env.REFERRALS.get("user:" + url.searchParams.get("id"), "json") || { friends: [] });
   const body = await request.json().catch(() => ({}));
   const user = await telegramUser(body.initData || "", env.BOT_TOKEN);
   if (!user) return Response.json({ ok: false, error: "Open this inside Telegram" }, { status: 401 });
@@ -164,10 +162,7 @@ async function referral(request, env) {
 async function withdraw(request, env) {
   if (!env.REFERRALS) return Response.json({ ok: false, error: "REFERRALS KV is missing" }, { status: 500 });
   const url = new URL(request.url);
-  if (request.method === "GET") {
-    const data = await env.REFERRALS.get("wd:" + url.searchParams.get("id"), "json") || { items: [] };
-    return Response.json(data);
-  }
+  if (request.method === "GET") return Response.json(await env.REFERRALS.get("wd:" + url.searchParams.get("id"), "json") || { items: [] });
   const body = await request.json().catch(() => ({}));
   const user = await telegramUser(body.initData || "", env.BOT_TOKEN);
   if (!user) return Response.json({ ok: false, error: "Open this inside Telegram" }, { status: 401 });
@@ -179,10 +174,8 @@ async function withdraw(request, env) {
   const key = "wd:" + user.id;
   const data = await env.REFERRALS.get(key, "json") || { items: [] };
   if (data.items.some((x) => x.status === "pending")) return Response.json({ ok: false, error: "You already have a pending request" }, { status: 400 });
-  state.bonus = state.bonus || 0;
-  state.claimed = state.claimed || 0;
-  if (state.bonus >= amount) state.bonus -= amount;
-  else { state.claimed -= (amount - state.bonus); state.bonus = 0; }
+  if ((state.bonus || 0) >= amount) state.bonus -= amount;
+  else { state.claimed = (state.claimed || 0) - (amount - (state.bonus || 0)); state.bonus = 0; }
   await env.REFERRALS.put("bal:" + user.id, JSON.stringify(state));
   const item = { id: Date.now().toString(), userId: user.id, name: user.username ? "@" + user.username : user.first_name || String(user.id), wallet, gross: amount, fee: WITHDRAW_FEE, net: amount - WITHDRAW_FEE, status: "pending", at: new Date().toISOString() };
   data.items.unshift(item);
@@ -239,4 +232,4 @@ async function telegramUser(initData, token) {
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
   if (hex !== hash) return null;
   return JSON.parse(params.get("user") || "null");
-  }
+}
