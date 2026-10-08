@@ -1,9 +1,11 @@
+const CHANNELS = { community: "@lumminercommunity", payouts: "@lumpayout" };
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/referral") return handleReferral(request, env);
     if (url.pathname === "/withdraw") return handleWithdraw(request, env);
-    if (url.pathname === "/check-join") return Response.json({ ok: true });
+    if (url.pathname === "/check-join") return handleJoin(request, env);
     return env.ASSETS.fetch(request);
   }
 };
@@ -20,6 +22,19 @@ function userFrom(initData) {
   catch (e) { return {}; }
 }
 
+async function handleJoin(request, env) {
+  const body = await request.json();
+  const user = userFrom(body.initData);
+  const chat = CHANNELS[body.task];
+  if (!user.id || !chat) return Response.json({ ok: false, error: "Bad task" });
+  if (!env.BOT_TOKEN) return Response.json({ ok: false, error: "Bot token missing" });
+  const res = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/getChatMember?chat_id=" + encodeURIComponent(chat) + "&user_id=" + user.id);
+  const data = await res.json();
+  const status = data.result && data.result.status;
+  const ok = status === "member" || status === "administrator" || status === "creator";
+  return Response.json({ ok, status: status || data.description || "left" });
+}
+
 async function handleReferral(request, env) {
   if (request.method === "GET") {
     const id = new URL(request.url).searchParams.get("id");
@@ -34,12 +49,13 @@ async function handleReferral(request, env) {
   if (body.action === "join" && body.inviter && body.inviter !== id) {
     const owner = (await read(env, "ref:" + body.inviter)) || { friends: [] };
     if (!owner.friends.some((f) => f.id === id)) {
-      owner.friends.push({ id, name: user.first_name || "Miner", qualified: false, paid: false });
+      owner.friends.unshift({ id, name: user.first_name || "Miner", qualified: false, paid: false });
       await write(env, "ref:" + body.inviter, owner);
-      await write(env, "link:" + id, body.inviter);
     }
-    return Response.json({ ok: true });
+    await write(env, "link:" + id, body.inviter);
+    return Response.json({ ok: true, friends: owner.friends });
   }
+
   if (body.action === "qualify") {
     const link = await read(env, "link:" + id);
     if (!link) return Response.json({ ok: true });
@@ -51,6 +67,7 @@ async function handleReferral(request, env) {
     }
     return Response.json({ ok: true });
   }
+
   if (body.action === "claim") {
     const owner = (await read(env, "ref:" + id)) || { friends: [] };
     const unpaid = owner.friends.filter((f) => f.qualified && !f.paid);
