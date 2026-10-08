@@ -12,6 +12,7 @@ export default {
     if (url.pathname === "/referral") return referral(request, env);
     if (url.pathname === "/mine") return mine(request, env);
     if (url.pathname === "/withdraw") return withdraw(request, env);
+    if (url.pathname === "/verify" && request.method === "POST") return verify(request, env);
     if (url.pathname === "/admin") return adminPage(request, env);
     if (url.pathname === "/admin/withdrawals") return adminWithdrawals(request, env);
     if (url.pathname === "/tonconnect-manifest.json") {
@@ -20,6 +21,18 @@ export default {
     return env.ASSETS.fetch(request);
   }
 };
+
+async function verify(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const user = await telegramUser(body.initData || "", env.BOT_TOKEN);
+  if (!user) return Response.json({ ok: false, error: "Open this inside Telegram" }, { status: 401 });
+  if (!env.TURNSTILE_SECRET) return Response.json({ ok: false, error: "TURNSTILE_SECRET is missing" }, { status: 500 });
+  const form = new FormData();
+  form.set("secret", env.TURNSTILE_SECRET);
+  form.set("response", body.token || "");
+  const check = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form }).then((r) => r.json());
+  return Response.json({ ok: !!check.success, error: check.success ? "" : "Verification failed" });
+}
 
 function costOf(n) { if (n <= 1) return 0; if (n >= 100) return TOP; return Math.round(40 * Math.pow(RATIO, n - 1)); }
 function levelFromBalance(amount) { let best = 1; for (let n = 2; n <= 100; n++) { if (costOf(n) <= amount) best = n; else break; } return best; }
@@ -232,4 +245,4 @@ async function telegramUser(initData, token) {
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
   if (hex !== hash) return null;
   return JSON.parse(params.get("user") || "null");
-}
+                                                                            }
