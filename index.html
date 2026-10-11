@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>LUM Miner</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstile" async defer></script>
+  <script src="//libtl.com/sdk.js" data-zone="12007112" data-sdk="show_12007112"></script>
+  <style>
+    :root { --bg:#05070a; --card:#0d1410; --line:#1c3a24; --text:#f4f7fb; --muted:#9aa6b5; --green:#2fce4a; --blue:#2f80ed; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,sans-serif; color:var(--text); background:radial-gradient(circle at 50% 22%, rgba(47,206,74,.26), transparent 26%), radial-gradient(circle at 12% 78%, rgba(20,90,40,.32), transparent 30%), linear-gradient(180deg, #070b09 0%, #05070a 46%, #07140c 100%); background-attachment:fixed; }
+    body:before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.45; background:repeating-linear-gradient(115deg, transparent 0 18px, rgba(47,206,74,.07) 18px 19px), repeating-linear-gradient(65deg, transparent 0 28px, rgba(180,255,120,.05) 28px 29px), radial-gradient(rgba(47,206,74,.28) 1px, transparent 1.4px); background-size:auto, auto, 18px 18px; }
+    .wrap { max-width:480px; margin:0 auto; padding:16px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px; }
+    button, .btn { background:var(--green); color:#000; border:0; border-radius:12px; padding:12px 16px; font-weight:700; cursor:pointer; }
+    button.ad { background:var(--blue); color:#fff; }
+    .note { color:var(--muted); font-size:13px; margin-top:8px; }
+    #gate { position:fixed; inset:0; background:#05070a; display:flex; align-items:center; justify-content:center; z-index:9999; }
+    #app { display:none; }
+  </style>
+</head>
+<body>
+  <div id="gate">
+    <div class="card" style="text-align:center;">
+      <h2>LUM Miner</h2>
+      <p>Verify to continue</p>
+      <div id="turnstile"></div>
+    </div>
+  </div>
+
+  <div id="app" class="wrap">
+    <div class="card">
+      <h2>LUM Miner</h2>
+      <p>Balance: <span id="lum">0</span> LUM</p>
+      <p>Hashrate: <span id="rate">0</span> TH/s</p>
+      <button id="claim">Claim</button>
+      <button class="ad" id="boost">Watch ad to boost +1 TH/s (2h)</button>
+      <div class="note" id="note"></div>
+    </div>
+
+    <div class="card">
+      <h3>Tasks</h3>
+      <button class="ad" id="task-ad">Watch Ad (+15 LUM)</button>
+    </div>
+
+    <div class="card">
+      <h3>Buy LUM</h3>
+      <button onclick="openBuy('ston')">Buy on STON.fi</button>
+      <button onclick="openBuy('dedust')">Buy on DeDust</button>
+      <div class="note">Trading involves risk. Do your own research.</div>
+    </div>
+
+    <div id="ton-connect"></div>
+  </div>
+
+  <script>
+    const STON_URL = "https://app.ston.fi/swap?chartVisible=false&ft=TON&tt=EQB..."; // replace with real jetton
+    const DEDUST_URL = "https://dedust.io/swap/TON/EQB..."; // replace with real jetton
+    let lum = 0, adUntil = 0, myId = "";
+
+    function note(msg, err) {
+      const el = document.getElementById("note");
+      if (el) { el.textContent = msg; el.style.color = err ? "#f66" : "var(--muted)"; }
+    }
+    function paint() {
+      document.getElementById("lum").textContent = lum.toFixed(2);
+      // add more UI updates as needed
+    }
+    function save() {
+      localStorage.setItem("lum", lum);
+      localStorage.setItem("adUntil", adUntil);
+    }
+    function openBuy(type) {
+      const url = type === "ston" ? STON_URL : DEDUST_URL;
+      Telegram.WebApp.openLink(url);
+    }
+
+    function showMonetagAd(requestVar) {
+      return new Promise((resolve, reject) => {
+        if (typeof window.show_12007112 !== "function") {
+          reject("SDK not ready");
+          return;
+        }
+        window.show_12007112({
+          requestVar: requestVar,
+          ymid: myId || "user"
+        }).then(resolve).catch(reject);
+      });
+    }
+
+    function startInAppAds() {
+      if (typeof window.show_12007112 === "function") {
+        window.show_12007112({
+          type: "inApp",
+          inAppSettings: {
+            frequency: 2,
+            capping: 0.1,
+            interval: 30,
+            timeout: 5,
+            everyPage: false
+          }
+        });
+      }
+    }
+
+    // Claim button
+    document.getElementById("claim").onclick = () => {
+      showMonetagAd("claim").then(() => {
+        // your claim logic here
+        note("Claimed");
+        paint();
+      }).catch(() => note("Ad not available", true));
+    };
+
+    // Boost button
+    document.getElementById("boost").onclick = () => {
+      showMonetagAd("boost").then(() => {
+        adUntil = Date.now() + 7200000;
+        save();
+        paint();
+        note("Boost active for 2 hours");
+      }).catch(() => note("Ad not available, try again later", true));
+    };
+
+    // Tasks Watch Ad
+    document.getElementById("task-ad").onclick = () => {
+      showMonetagAd("task_ad").then(() => {
+        lum += 15;
+        save();
+        paint();
+        note("+15 LUM added");
+      }).catch(() => note("Ad not available", true));
+    };
+
+    // Cloudflare Turnstile
+    window.onloadTurnstile = () => {
+      turnstile.render("#turnstile", {
+        sitekey: "YOUR_TURNSTILE_SITEKEY", // replace
+        callback: (token) => {
+          document.getElementById("gate").style.display = "none";
+          document.getElementById("app").style.display = "block";
+          startInAppAds(); // In-App Interstitial after verification
+          note("Welcome");
+        }
+      });
+    };
+
+    // Telegram + TON Connect init
+    try {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+      myId = Telegram.WebApp.initDataUnsafe?.user?.id || "";
+    } catch (e) {}
+
+    try {
+      const ui = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: "https://your-domain.com/tonconnect-manifest.json"
+      });
+      // wallet button logic here if needed
+    } catch (e) {}
+
+    // Load saved data
+    lum = Number(localStorage.getItem("lum") || 0);
+    adUntil = Number(localStorage.getItem("adUntil") || 0);
+    paint();
+  </script>
+</body>
+</html>
