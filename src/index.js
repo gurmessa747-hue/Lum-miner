@@ -1,4 +1,9 @@
-const CHANNELS = { community: "@lumminercommunity", payouts: "@lumpayout" };
+const CHANNELS = {
+  community: "@lumminercommunity",
+  payouts: "@lumpayout",
+  gramapps: "@gramminiappsmining",
+  grammoney: "@Grammoneywallet"
+};
 
 export default {
   async fetch(request, env) {
@@ -92,4 +97,4 @@ async function handleWithdraw(request, env) {
   row.items.unshift({ net: amount - 1000, status: "pending", wallet: body.wallet || "" });
   await write(env, "wd:" + id, row);
   return Response.json({ ok: true, items: row.items });
-}
+        }
