@@ -5,8 +5,7 @@ const CHANNELS = {
   grammoney: "@Grammoneywallet"
 };
 
-// Change this to your own Telegram user ID so you receive withdrawal alerts
-const ADMIN_ID = "761418905"; // ← put your Telegram ID here
+const ADMIN_ID = "761418905";
 
 export default {
   async fetch(request, env) {
@@ -15,6 +14,7 @@ export default {
     if (url.pathname === "/withdraw") return handleWithdraw(request, env);
     if (url.pathname === "/check-join") return handleJoin(request, env);
     if (url.pathname === "/admin-mark-paid") return handleMarkPaid(request, env);
+    if (url.pathname === "/admin") return handleAdmin(request, env);
     return env.ASSETS.fetch(request);
   }
 };
@@ -115,7 +115,6 @@ async function handleWithdraw(request, env) {
   row.items.unshift({ net, status: "pending", wallet: body.wallet || "", requestedAt: Date.now() });
   await write(env, "wd:" + id, row);
 
-  // Notify admin
   const msg = `💰 <b>New Withdrawal Request</b>\n\nUser: ${user.first_name || "Miner"} (ID: ${id})\nAmount: ${amount} LUM\nNet: ${net} LUM\nWallet: <code>${body.wallet || "none"}</code>`;
   await sendTelegram(env, ADMIN_ID, msg);
 
@@ -139,4 +138,70 @@ async function handleMarkPaid(request, env) {
   } catch (e) {
     return Response.json({ ok: false, error: String(e) }, { status: 500 });
   }
+}
+
+async function handleAdmin(request, env) {
+  const url = new URL(request.url);
+  const key = url.searchParams.get("key");
+  if (key !== "761418905") return new Response("Unauthorized", { status: 401 });
+
+  let pending = [];
+  try {
+    const list = await env.REFERRALS.list({ prefix: "wd:" });
+    for (const k of list.keys) {
+      const row = await read(env, k.name);
+      if (!row || !row.items) continue;
+      row.items.forEach((item, index) => {
+        if (item.status === "pending") {
+          pending.push({
+            userId: k.name.replace("wd:", ""),
+            index,
+            net: item.net,
+            wallet: item.wallet || ""
+          });
         }
+      });
+    }
+  } catch (e) {
+    return new Response("Error loading data: " + e, { status: 500 });
+  }
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>LUM Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui; background:#0a0f0c; color:#eee; padding:16px; }
+    .card { background:#151c18; border:1px solid #2a4a32; border-radius:12px; padding:14px; margin-bottom:12px; }
+    button { background:#2fce4a; color:#06210c; border:0; padding:10px 16px; border-radius:8px; font-weight:700; }
+  </style>
+</head>
+<body>
+  <h1>Pending Withdrawals</h1>
+  ${pending.length ? pending.map(p => `
+    <div class="card">
+      User ID: <b>${p.userId}</b><br>
+      Net: ${p.net} LUM<br>
+      Wallet: <code>${p.wallet}</code><br>
+      <button onclick="mark('${p.userId}', ${p.index})">Mark as Paid</button>
+    </div>
+  `).join("") : "<p>No pending withdrawals</p>"}
+  <script>
+    async function mark(userId, index) {
+      const res = await fetch("/admin-mark-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, index })
+      });
+      const data = await res.json();
+      if (data.ok) location.reload();
+      else alert(data.error || "Failed");
+    }
+  </script>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    }
