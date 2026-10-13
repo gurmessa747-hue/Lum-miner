@@ -5,12 +5,16 @@ const CHANNELS = {
   grammoney: "@Grammoneywallet"
 };
 
+// Change this to your own Telegram user ID so you receive withdrawal alerts
+const ADMIN_ID = "761418905"; // ← put your Telegram ID here
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/referral") return handleReferral(request, env);
     if (url.pathname === "/withdraw") return handleWithdraw(request, env);
     if (url.pathname === "/check-join") return handleJoin(request, env);
+    if (url.pathname === "/admin-mark-paid") return handleMarkPaid(request, env);
     return env.ASSETS.fetch(request);
   }
 };
@@ -27,13 +31,24 @@ function userFrom(initData) {
   catch (e) { return {}; }
 }
 
+async function sendTelegram(env, chatId, text) {
+  if (!env.BOT_TOKEN) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" })
+    });
+  } catch (e) {}
+}
+
 async function handleJoin(request, env) {
   const body = await request.json();
   const user = userFrom(body.initData);
   const chat = CHANNELS[body.task];
   if (!user.id || !chat) return Response.json({ ok: false, error: "Bad task" });
   if (!env.BOT_TOKEN) return Response.json({ ok: false, error: "Bot token missing" });
-  const res = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/getChatMember?chat_id=" + encodeURIComponent(chat) + "&user_id=" + user.id);
+  const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/getChatMember?chat_id=${encodeURIComponent(chat)}&user_id=${user.id}`);
   const data = await res.json();
   const status = data.result && data.result.status;
   const ok = status === "member" || status === "administrator" || status === "creator";
@@ -90,11 +105,38 @@ async function handleWithdraw(request, env) {
     return Response.json({ items: (row && row.items) || [] });
   }
   const body = await request.json();
-  const id = String(userFrom(body.initData).id || "");
+  const user = userFrom(body.initData);
+  const id = String(user.id || "");
   const amount = Number(body.amount || 0);
   if (!id || amount < 10000) return Response.json({ ok: false, error: "Invalid request" }, { status: 400 });
+
   const row = (await read(env, "wd:" + id)) || { items: [] };
-  row.items.unshift({ net: amount - 1000, status: "pending", wallet: body.wallet || "" });
+  const net = amount - 1000;
+  row.items.unshift({ net, status: "pending", wallet: body.wallet || "", requestedAt: Date.now() });
   await write(env, "wd:" + id, row);
+
+  // Notify admin
+  const msg = `💰 <b>New Withdrawal Request</b>\n\nUser: ${user.first_name || "Miner"} (ID: ${id})\nAmount: ${amount} LUM\nNet: ${net} LUM\nWallet: <code>${body.wallet || "none"}</code>`;
+  await sendTelegram(env, ADMIN_ID, msg);
+
   return Response.json({ ok: true, items: row.items });
+}
+
+async function handleMarkPaid(request, env) {
+  if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  try {
+    const body = await request.json();
+    const userId = String(body.userId || "");
+    const index = Number(body.index || 0);
+    if (!userId) return Response.json({ ok: false, error: "Missing userId" });
+
+    const row = await read(env, "wd:" + userId);
+    if (!row || !row.items || !row.items[index]) return Response.json({ ok: false, error: "Not found" });
+
+    row.items[index].status = "paid";
+    await write(env, "wd:" + userId, row);
+    return Response.json({ ok: true });
+  } catch (e) {
+    return Response.json({ ok: false, error: String(e) }, { status: 500 });
+  }
         }
