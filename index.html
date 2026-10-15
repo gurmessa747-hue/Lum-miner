@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>LUM Miner</title>
+  <meta property="og:title" content="LUM Miner" />
+  <meta property="og:description" content="Mine LUM tokens directly in Telegram. Watch ads, boost your speed, and earn rewards." />
+  <meta property="og:image" content="https://i.imgur.com/RgxqjPH.jpeg" />
+  <meta property="og:image:width" content="640" />
+  <meta property="og:image:height" content="360" />
+  <meta property="og:type" content="website" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js"></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstile" async defer></script>
+  <script src="//libtl.com/sdk.js" data-zone="12007112" data-sdk="show_12007112"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --bg:#05070a; --card:#0d1410; --line:#1c3a24; --text:#f4f7fb; --muted:#9aa6b5; --green:#2fce4a; --blue:#2f80ed; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,sans-serif; color:var(--text); background:radial-gradient(circle at 50% 22%, rgba(47,206,74,.26), transparent 26%), radial-gradient(circle at 12% 78%, rgba(20,90,40,.32), transparent 30%), linear-gradient(180deg, #070b09 0%, #05070a 46%, #07140c 100%); background-attachment:fixed; }
+    body:before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.45; background:repeating-linear-gradient(115deg, transparent 0 18px, rgba(47,206,74,.07) 18px 19px), repeating-linear-gradient(65deg, transparent 0 28px, rgba(180,255,120,.05) 28px 29px), radial-gradient(rgba(47,206,74,.28) 1px, transparent 1.4px); background-size:auto, auto, 18px 18px; }
+    @keyframes floaty { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-10px); } }
+    @keyframes pulse { 0%,100% { box-shadow:0 0 24px rgba(47,206,74,.28), inset 0 0 0 12px #071208; } 50% { box-shadow:0 0 54px rgba(47,206,74,.7), inset 0 0 0 12px #071208; } }
+    @keyframes glowtext { 0%,100% { text-shadow:0 0 10px rgba(47,206,74,.25); } 50% { text-shadow:0 0 22px rgba(125,255,138,.85); } }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+    @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    @keyframes shine { from { background-position:0 0; } to { background-position:40px 0; } }
+    #gate { position:fixed; inset:0; z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:28px; text-align:center; background:radial-gradient(circle at 50% 28%, #24315f, #12083a 55%); }
+    #gate.hide { display:none; }
+    .gate-logo { width:150px; height:150px; filter:drop-shadow(0 0 18px rgba(47,206,74,.55)); border-radius:50%; }
+    #gate h1 { margin:8px 0 0; color:#2fce4a; font-size:36px; }
+    #gate-status, .gate-note, .gate-hint { color:#d5d8e0; max-width:320px; line-height:1.4; margin:0; }
+    .gate-hint { font-size:16px; color:#f4f7fb; }
+    #turnstile-box { min-height:74px; display:flex; justify-content:center; }
+    .app { position:relative; max-width:430px; margin:0 auto; min-height:100vh; padding:14px 14px 108px; }
+    .page { display:none; } .page.on { display:block; animation:rise .35s ease; } h1 { font-size:28px; margin:4px 0; }
+    .label, .note, .addr { color:var(--muted); } .green { color:var(--green); font-weight:700; }
+    button.btn, button.buy, button.watch, button.go, button.claim, button.action, button.ad, button.range, button.pill { border:0; background:var(--green); color:#06210c; font-weight:800; border-radius:12px; }
+    button.btn, button.buy, button.watch, button.go, button.action, button.ad { width:100%; padding:12px; }
+    button.claim { width:100%; margin-top:8px; padding:20px 16px; font-size:22px; letter-spacing:1px; border-radius:18px; animation:pulse 2.4s ease-in-out infinite; }
+    button.ad, button.buy { margin-top:10px; } button.pill { width:auto; border-radius:999px; padding:10px 16px; }
+    button.go.done, button.watch:disabled, button.buy.reached, button.pill:disabled { background:#1e3a28; color:#9ed7ae; animation:none; }
+    button.buy.active, button.buy.price { background:#2fce4a; color:#06210c; }
+    button.wallet { background:var(--blue); color:#fff; animation:none; }
+    button.wallet.connected { background:#1d4ed8; color:#fff; }
+    .card, .top, .adcard { background:rgba(10,16,12,.86); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+    .adcard { background:linear-gradient(180deg,#132016,#0c140f); }
+    .row, .user, .bank, .frow { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+    .ico-box, .avatar { width:42px; height:42px; border-radius:12px; background:#10161c; display:flex; align-items:center; justify-content:center; font-size:20px; }
+    .avatar { background:var(--green); color:#06210c; font-weight:800; }
+    .grow { flex:1; } .addr { font-size:12px; word-break:break-all; }
+    .top { display:grid; grid-template-columns:1fr 1fr; } .bank { grid-column:1 / -1; }
+    .track, .bar { height:8px; background:#243044; border-radius:99px; overflow:hidden; }
+    .fill, .bar i { display:block; height:100%; width:0; background:linear-gradient(90deg,#2fce4a,#b6ff4a,#2fce4a); background-size:40px 8px; animation:shine 1.2s linear infinite; }
+    .wallet-wrap, .claim-num { text-align:center; }
+    .claim-num { font-size:34px; font-weight:800; color:#7dff8a; animation:glowtext 1.8s ease-in-out infinite; }
+    .stage { height:230px; display:flex; align-items:center; justify-content:center; }
+    .mark { width:180px; height:180px; border-radius:50%; background:radial-gradient(circle at 50% 42%, #d8ff9a, #39e023 42%, #0b8f12); position:relative; animation:floaty 3.2s ease-in-out infinite, pulse 2.4s ease-in-out infinite; }
+    .mark:before, .mark:after, .mark span { content:""; position:absolute; background:#111; border-radius:40px; }
+    .mark:before { width:44px; height:74px; left:68px; top:36px; } .mark:after { width:32px; height:58px; left:40px; top:58px; transform:rotate(-28deg); } .mark span { width:32px; height:58px; right:40px; top:58px; transform:rotate(28deg); }
+    #live { animation:blink 1.4s ease-in-out infinite; }
+    .ranges { display:flex; gap:8px; background:#121820; border-radius:14px; padding:6px; margin:10px 0; }
+    button.range { flex:1; background:transparent; color:var(--muted); padding:8px; } button.range.on { background:#243044; color:#fff; }
+    .badge { background:#14301c; color:var(--green); border-radius:999px; padding:8px 12px; font-weight:800; }
+    svg.chart { width:100%; height:140px; display:block; background:#0c140f; border-radius:12px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .pack { background:#101910; border:1px solid #245c34; border-radius:16px; padding:12px; min-height:132px; }
+    .pack.active { border-color:#2fce4a; background:#142218; }
+    .friend { border-color:#245c34; }
+    select, input { width:100%; margin-top:8px; padding:12px; border-radius:12px; border:1px solid var(--line); background:#0f131b; color:var(--text); }
+    .nav { position:fixed; left:0; right:0; bottom:0; display:flex; background:rgba(5,8,7,.94); border-top:1px solid #1c3a24; padding:10px 4px 14px; }
+    .nav button { flex:1; background:transparent; border:0; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:4px; font-size:14px; font-weight:700; }
+    .nav .ico { font-size:26px; line-height:1; } .nav button.on { color:var(--green); }
+    #whist { white-space:pre-line; }
+    .buy-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+    button.buy-ext { width:100%; padding:12px; border:0; border-radius:12px; font-weight:800; }
+    button.buy-ston { background:#2fce4a; color:#06210c; }
+    button.buy-dedust { background:#f5c542; color:#1a1404; }
+    .buy-note { margin:10px 2px 0; font-size:13px; line-height:1.45; color:var(--muted); }
+    #wmsg { display:none; margin-top:10px; padding:10px 12px; border-radius:10px; background:#14301c; color:#b6ff4a; font-weight:700; }
+    #wmsg.show { display:block; }
+    #wmsg.bad { background:#3a2214; color:#ffb15a; }
+    #task-msg { margin-top:8px; font-size:14px; color:#b6ff4a; font-weight:700; min-height:20px; }
+  </style>
+</head>
+<body>
+  <div id="gate">
+    <svg class="gate-logo" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="leaf" cx="50%" cy="40%" r="62%">
+          <stop offset="0%" stop-color="#d4ff7a"/>
+          <stop offset="40%" stop-color="#3ee026"/>
+          <stop offset="100%" stop-color="#0a7f12"/>
+        </radialGradient>
+      </defs>
+      <circle cx="100" cy="100" r="96" fill="#061008"/>
+      <circle cx="100" cy="100" r="82" fill="none" stroke="#2fce4a" stroke-width="7"/>
+      <circle cx="100" cy="100" r="72" fill="url(#leaf)"/>
+      <path fill="#050a08" d="M100 36c11 22 19 36 19 54 0 13-8 22-19 22s-19-9-19-22c0-18 8-32 19-54z"/>
+      <path fill="#050a08" d="M100 80c28-6 46 10 52 30 5 15-3 28-17 30-19 3-29-12-35-28-6 16-16 31-35 28-14-2-22-15-17-30 6-20 24-36 52-30z"/>
+      <path fill="#050a08" d="M100 100c19 10 32 34 32 56 0 10-9 17-18 17-12 0-17-9-15-21 2-16-2-27 1-52z"/>
+      <path fill="#050a08" d="M100 100c-19 10-32 34-32 56 0 10 9 17 18 17 12 0 17-9 15-21-2-16 2-27-1-52z"/>
+    </svg>
+    <h1>LUM Miner</h1>
+    <p id="gate-status">Checking your connection is secure...</p>
+    <div id="turnstile-box"></div>
+    <p class="gate-hint">Tap the box to verify</p>
+    <p class="gate-note">Protected by Cloudflare to keep bots and fake accounts out of the mine.</p>
+  </div>
+  <div class="app">
+    <section id="home" class="page on">
+      <div class="top"><div><div class="label" data-i18n="mining_rate">MINING RATE</div><div id="hashrate">0.50 TH/s</div></div><div><div class="label" data-i18n="current_rank">CURRENT RANK</div><div id="rank">Level 1</div></div><div class="bank"><span id="status">Mining</span><div class="track"><div class="fill" id="bank-fill"></div></div><span id="live">live</span></div></div>
+      <div class="wallet-wrap"><b id="held">0.00000000 LUM</b><div class="note" data-i18n="claimed_in_app">Claimed in app</div></div>
+      <div class="stage"><div class="mark"><span></span></div></div>
+      <div class="claim-num" id="reward">+0.00000000</div>
+      <button class="claim" id="claim" data-i18n="claim">Claim</button>
+      <button class="ad" id="ad" data-i18n="watch_ad_boost">Watch ad to boost +1 TH/s (2h)</button>
+      <div class="buy-row"><button class="buy-ext buy-ston" id="buy-ston">Buy on STON.fi</button><button class="buy-ext buy-dedust" id="buy-dedust">Buy on DeDust</button></div>
+      <p class="buy-note" data-i18n="buy_note">You can also buy and sell $LUM through Keeper (formerly Tonkeeper). Just search for “LUM” in the Keeper wallet.</p>
+    </section>
+    <section id="tasks" class="page">
+      <div class="label">LUM MINER</div><h1 data-i18n="lum_tasks">LUM Tasks</h1><p class="note" data-i18n="tasks_note">Complete tasks and watch ads to earn LUM</p>
+      <div class="adcard"><div class="frow"><div class="ico-box">📺</div><div class="grow"><b data-i18n="watch_ads">Watch Ads</b><div class="green" id="ad-line">+15 LUM per ad · 0/10 today</div></div></div><div class="bar" style="margin:12px 0"><i id="ad-bar"></i></div><div class="note" id="ad-left2">10 left today</div><button class="watch" id="watch">▶ Watch Ad (+15 LUM)</button><div id="task-msg"></div></div>
+      <div class="card"><div class="row"><b>Join LUM Community</b><span class="green">+50 LUM</span></div><div class="note">Step 1: join the channel. Step 2: come back and claim.</div><button class="go" data-task="community" data-url="https://t.me/lumminercommunity" data-reward="50">1) JOIN CHANNEL</button></div>
+      <div class="card"><div class="row"><b>Join LUM payouts</b><span class="green">+50 LUM</span></div><div class="note">Step 1: join the channel. Step 2: come back and claim.</div><button class="go" data-task="payouts" data-url="https://t.me/lumpayout" data-reward="50">1) JOIN CHANNEL</button></div>
+      <div class="card"><div class="row"><b>Join Gram Apps</b><span class="green">+30 LUM</span></div><div class="note">Step 1: join the channel. Step 2: come back and claim.</div><button class="go" data-task="gramapps" data-url="https://t.me/gramminiappsmining" data-reward="30">1) JOIN CHANNEL</button></div>
+      <div class="card"><div class="row"><b>Join Gram Money</b><span class="green">+30 LUM</span></div><div class="note">Step 1: join the channel. Step 2: come back and claim.</div><button class="go" data-task="grammoney" data-url="https://t.me/Grammoneywallet" data-reward="30">1) JOIN CHANNEL</button></div>
+      <div class="card"><div class="row"><b>Subscribe LUM YouTube</b><span class="green">+40 LUM</span></div><div class="note">Step 1: subscribe to the channel. Step 2: come back and claim.</div><button class="go" data-task="youtube" data-url="https://www.youtube.com/@lumeon_lum" data-reward="40">1) SUBSCRIBE</button></div>
+    </section>
+    <section id="boost" class="page">
+      <h1 data-i18n="boost_title">Boost Mining Speed</h1><p class="note" data-i18n="boost_note">Level follows claimed LUM plus on-chain holding. Level 100 is 5,000,000 LUM.</p>
+      <div class="row"><h1 id="boost-level" style="margin:0">Level 1</h1><span class="badge">All-time High</span></div>
+      <div class="green" id="pnl">Today's PNL +0.00 LUM</div>
+      <div class="ranges"><button class="range" data-range="24h">24h</button><button class="range on" data-range="7d">7d</button><button class="range" data-range="30d">30d</button><button class="range" data-range="all">All</button></div>
+      <svg class="chart" id="chart" viewBox="0 0 320 140"></svg>
+      <h1 style="font-size:20px" data-i18n="upgrade_packs">Mining Speed Upgrade Packs</h1>
+      <div class="row"><button class="btn" id="prev">Prev</button><span id="page-label"></span><button class="btn" id="next">Next</button></div>
+      <div class="grid" id="packs"></div>
+    </section>
+    <section id="friends" class="page">
+      <div class="label">LUM MINER</div><h1 data-i18n="friends">Friends</h1>
+      <p class="note" data-i18n="friends_note">Invite friends to boost mining speed! Qualified only after wallet connect.</p>
+      <div class="card frow"><div class="ico-box">🔗</div><div class="grow"><b data-i18n="invite_link">Your Invite Link</b><div class="addr" id="invite-link"></div></div><button class="pill" id="invite" data-i18n="copy">Copy</button></div>
+      <div class="card frow"><div class="ico-box">👥</div><div class="grow"><b data-i18n="your_referrals">Your Referrals</b><div class="note" id="ref-count">0 qualified · 0 total</div></div></div>
+      <div class="card frow"><div class="ico-box">🎁</div><div class="grow"><b data-i18n="referral_reward">Referral Reward</b><div class="note" id="ref-available">0 available · +1000 LUM each</div></div><button class="pill" id="claim-ref">Claim</button></div>
+      <div class="card frow"><div class="ico-box">🎁</div><div class="grow"><b data-i18n="team_wallet">Team Wallet</b><div class="note" id="team-wallet">0 LUM from your network</div></div><button class="pill" id="share" data-i18n="share">Share</button></div>
+      <p class="note" style="text-align:center" data-i18n="latest_friends">Latest invited friends</p>
+      <div id="friend-list"></div>
+    </section>
+    <section id="profile" class="page">
+      <h1 data-i18n="profile">Profile</h1>
+      <div class="card user"><div class="avatar" id="avatar">L</div><div class="grow"><b id="uname">Miner</b><div class="note" id="handle"></div><div class="note" id="tgid"></div></div></div>
+      <div id="ton-connect"></div>
+      <div class="card"><div class="row"><b data-i18n="holding_wallet">Holding Wallet</b><b id="bal">0.0000 LUM</b></div><div class="note" data-i18n="onchain">On-chain LUM</div></div>
+      <div class="card"><div class="row"><b data-i18n="mining_wallet">Mining Wallet</b><b id="mined">0 LUM</b></div></div>
+      <div class="card"><b data-i18n="withdraw">Withdraw LUM</b><input id="wamount" type="number" min="10000" placeholder="Minimum 10000" /><div class="note" id="min-note">Minimum 10,000 LUM. Fee 1,000 LUM.</div><button class="btn" id="do-withdraw" data-i18n="request_withdrawal">Request withdrawal</button><div id="wmsg"></div></div>
+      <div class="card"><b data-i18n="withdrawal_history">Withdrawal History</b><div id="whist" class="note">No requests yet</div></div>
+      <div class="card"><b data-i18n="language">Language</b>
+        <select id="lang">
+          <option value="en">English</option>
+          <option value="zh">中文 (Chinese)</option>
+          <option value="hi">हिन्दी (Hindi)</option>
+          <option value="es">Español (Spanish)</option>
+          <option value="ar">العربية (Arabic)</option>
+          <option value="fr">Français (French)</option>
+          <option value="ru">Русский (Russian)</option>
+          <option value="pt">Português (Portuguese)</option>
+          <option value="id">Indonesia</option>
+          <option value="bn">বাংলা (Bengali)</option>
+        </select>
+      </div>
+    </section>
+  </div>
+  <nav class="nav">
+    <button class="on" data-page="home"><span class="ico">⛏️</span><span data-i18n="mine">Mine</span></button>
+    <button data-page="tasks"><span class="ico">📋</span><span data-i18n="tasks">Tasks</span></button>
+    <button data-page="boost"><span class="ico">⚡</span><span data-i18n="boost">Boost</span></button>
+    <button data-page="friends"><span class="ico">👥</span><span data-i18n="friends">Friends</span></button>
+    <button data-page="profile"><span class="ico">👤</span><span data-i18n="profile">Profile</span></button>
+  </nav>
+  <script>
+    const SUPABASE_URL = "https://gcpihwbtnjrozefcrvrp.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjcGlod2J0bmpyb3plZmNydnJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwNDI0MjgsImV4cCI6MjEwNzYxODQyOH0.H2omBrOJhmtxPDOm2zgLBlX6JCks45qwps1bBcFywD4";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const TURNSTILE_SITE_KEY = "0x4AAAAAAFRNMemz-cb8hOgy";
+    const JETTON = "EQCuTahLfZSKRGP4GF02yPMnFAq-bT1XJU4Z8V1DH_5sWlmw";
+    const STON_URL = "https://app.ston.fi/swap?ft=TON&tt=" + JETTON + "&chartVisible=false";
+    const DEDUST_URL = "https://dedust.io/swap/TON/" + JETTON;
+    const MAX = 100, PAGE = 20, CYCLE = 6 * 60 * 60 * 1000, KEY = "lum-miner-v3", FEE = 1000, MINW = 10000, TOP = 5000000;
+    const RATIO = Math.pow(TOP / 40, 1 / 99);
+    let lum = 0, address = "", ads = 0, level = 1, page = 0, refs = 0, adUntil = 0, bonus = 0, claimed = 0, startedAt = Date.now(), history = [], doneTasks = [], friends = [], samples = [], myId = "", walletBtn = null, joined = false, range = "7d", manualPage = false, currentLang = "en", adsResetAt = 0;
+    const $ = (id) => document.getElementById(id);
+    const initData = () => (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+    const inviteUrl = () => "https://t.me/lumeonminer_bot/Lum?startapp=" + myId;
+
+    // Keep your full i18n object here (copy from previous version)
+
+    function load() {
+      try {
+        const s = JSON.parse(localStorage.getItem(KEY) || "{}");
+        startedAt = s.startedAt || Date.now();
+        ads = s.ads || 0;
+        bonus = s.bonus || 0;
+        claimed = s.claimed || 0;
+        adUntil = s.adUntil || 0;
+        history = s.history || [];
+        doneTasks = s.doneTasks || [];
+        joined = !!s.joined;
+        samples = s.samples || [];
+        adsResetAt = s.adsResetAt || 0;
+      } catch (e) {}
+    }
+    function save() {
+      localStorage.setItem(KEY, JSON.stringify({ startedAt, ads, bonus, claimed, adUntil, history, doneTasks, joined, samples, adsResetAt }));
+    }
+
+    // ... (keep all your existing functions: stepAt, rateOf, paint, etc.)
+
+    async function syncFriends() {
+      if (!myId) return;
+      const { data } = await supabase.from("referrals").select("*").eq("inviter_id", myId);
+      friends = data || [];
+      refs = friends.filter(f => f.qualified && !f.paid).length;
+      renderFriends();
+      paint();
+    }
+
+    async function syncWithdrawals() {
+      if (!myId) return;
+      const { data } = await supabase.from("withdrawals").select("*").eq("user_id", myId).order("created_at", { ascending: false });
+      history = (data || []).map(x => x.amount + " LUM · " + x.status);
+      paint();
+    }
+
+    // Update these event handlers:
+    $("claim-ref").onclick = async () => {
+      if (!refs) return;
+      const unpaid = friends.filter(f => f.qualified && !f.paid);
+      for (const f of unpaid) {
+        await supabase.from("referrals").update({ paid: true }).eq("id", f.id);
+      }
+      bonus += unpaid.length * 1000;
+      sample();
+      save();
+      await syncFriends();
+      paint();
+    };
+
+    $("do-withdraw").onclick = async () => {
+      const amount = Number($("wamount").value);
+      if (!address) { note("Connect wallet first", true); return; }
+      if (!amount || amount < MINW) { note("Minimum is 10,000 LUM", true); return; }
+      if (purse() < amount) { note("Insufficient balance", true); return; }
+      note("Sending request...");
+      const { error } = await supabase.from("withdrawals").insert({
+        user_id: myId,
+        amount: amount - FEE,
+        wallet: address,
+        status: "pending"
+      });
+      if (error) { note("Failed to send request", true); return; }
+      if (bonus >= amount) bonus -= amount; else { claimed -= (amount - bonus); bonus = 0; }
+      $("wamount").value = "";
+      note("Request received. Payout is sent manually.");
+      save();
+      await syncWithdrawals();
+      paint();
+    };
+
+    // Keep the rest of your script (ads, tasks, wallet, etc.)
+  </script>
+</body>
+                                           </html>
