@@ -1,5 +1,5 @@
-const CHANNELS = {
-  community: "@lumminercommunity",
+const CHANNELS = { 
+  community: "@lumminercommunity", 
   payouts: "@lumpayout",
   gramapps: "@gramminiappsmining",
   grammoney: "@Grammoneywallet"
