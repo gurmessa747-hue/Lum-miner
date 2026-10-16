@@ -8,11 +8,9 @@ const CHANNELS = {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-
     if (url.pathname === "/check-join") return handleJoin(request, env);
     if (url.pathname === "/withdraw") return handleWithdraw(request, env);
     if (url.pathname === "/admin") return handleAdmin(request, env);
-
     return env.ASSETS.fetch(request);
   }
 };
@@ -36,7 +34,6 @@ async function handleJoin(request, env) {
   const chat = CHANNELS[body.task];
   if (!user.id || !chat) return Response.json({ ok: false, error: "Bad task" });
   if (!env.BOT_TOKEN) return Response.json({ ok: false, error: "Bot token missing" });
-
   const res = await fetch("https://api.telegram.org/bot" + env.BOT_TOKEN + "/getChatMember?chat_id=" + encodeURIComponent(chat) + "&user_id=" + user.id);
   const data = await res.json();
   const status = data.result && data.result.status;
@@ -50,22 +47,13 @@ async function handleWithdraw(request, env) {
     const row = id ? await read(env, "wd:" + id) : null;
     return Response.json({ items: (row && row.items) || [] });
   }
-
   const body = await request.json();
   const id = String(userFrom(body.initData).id || "");
   const amount = Number(body.amount || 0);
   if (!id || amount < 10000) return Response.json({ ok: false, error: "Invalid request" }, { status: 400 });
-
   const row = (await read(env, "wd:" + id)) || { items: [] };
-  row.items.unshift({ 
-    net: amount - 1000, 
-    status: "pending", 
-    wallet: body.wallet || "", 
-    time: Date.now() 
-  });
+  row.items.unshift({ net: amount - 1000, status: "pending", wallet: body.wallet || "", time: Date.now() });
   await write(env, "wd:" + id, row);
-
-  // Notify admin
   if (env.BOT_TOKEN && env.ADMIN_CHAT_ID) {
     const text = `New withdrawal\nUser: ${id}\nAmount: ${amount - 1000} LUM\nWallet: ${body.wallet}`;
     await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
@@ -74,31 +62,29 @@ async function handleWithdraw(request, env) {
       body: JSON.stringify({ chat_id: env.ADMIN_CHAT_ID, text })
     }).catch(() => {});
   }
-
   return Response.json({ ok: true, items: row.items });
 }
 
 async function handleAdmin(request, env) {
   const url = new URL(request.url);
-  if (url.searchParams.get("key") !== "761418905") {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  if (url.searchParams.get("key") !== "761418905") return new Response("Unauthorized", { status: 401 });
 
   if (request.method === "GET") {
+    // Simple list of known users is not possible without scanning all keys.
+    // For now keep the manual form. You can later add a separate KV list of pending users.
     return new Response(`
       <!DOCTYPE html>
-      <html>
-      <head><title>LUM Admin</title></head>
+      <html><head><title>LUM Admin</title></head>
       <body style="font-family:system-ui;padding:24px;max-width:600px;margin:auto">
         <h2>LUM Withdrawal Admin</h2>
-        <p>Enter User ID and item index (0 = newest) to mark as paid.</p>
+        <p>Enter User ID and index (0 = newest) to mark as paid.</p>
         <form method="POST">
           <input name="userId" placeholder="User Telegram ID" required style="width:100%;padding:10px;margin:8px 0">
           <input name="index" type="number" placeholder="Index (0 = newest)" required style="width:100%;padding:10px;margin:8px 0">
           <button style="padding:12px 20px;background:#2fce4a;border:0;border-radius:8px;font-weight:bold">Mark as Paid</button>
         </form>
-      </body>
-      </html>
+        <p style="margin-top:30px;color:#666">Note: To see a full list of pending withdrawals you need to track user IDs separately. For now use the User ID from the bot notification.</p>
+      </body></html>
     `, { headers: { "Content-Type": "text/html" } });
   }
 
@@ -107,11 +93,10 @@ async function handleAdmin(request, env) {
     const userId = form.get("userId");
     const index = Number(form.get("index") || 0);
     const row = await read(env, "wd:" + userId);
-    if (!row || !row.items[index]) return new Response("Withdrawal not found");
+    if (!row || !row.items[index]) return new Response("Not found");
     row.items[index].status = "paid";
     await write(env, "wd:" + userId, row);
-    return new Response("Marked as paid. You can close this page.");
+    return new Response("Marked as paid");
   }
-
   return new Response("Method not allowed", { status: 405 });
-      }
+}
