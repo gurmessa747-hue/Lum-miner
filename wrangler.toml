@@ -8,3 +8,6 @@ directory = "./"
 [[kv_namespaces]]
 binding = "REFERRALS"
 id = "14813218a86f46e2b823c40df5ef3a82"
+
+[limits]
+subrequests = 100000
