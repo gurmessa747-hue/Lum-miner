@@ -145,14 +145,24 @@ async function handleAdmin(request, env) {
   const key = url.searchParams.get("key");
   if (key !== "761418905") return new Response("Unauthorized", { status: 401 });
 
+  const page = Math.max(0, parseInt(url.searchParams.get("page") || "0", 10));
+  const PER_PAGE = 50;
+
   let pending = [];
   try {
-    const list = await env.REFERRALS.list({ prefix: "wd:" });
+    const list = await env.REFERRALS.list({ prefix: "wd:", limit: 1000 });
+    let count = 0;
+    const start = page * PER_PAGE;
+
     for (const k of list.keys) {
+      if (count >= start + PER_PAGE) break;
       const row = await read(env, k.name);
       if (!row || !row.items) continue;
-      row.items.forEach((item, index) => {
-        if (item.status === "pending") {
+
+      for (let index = 0; index < row.items.length; index++) {
+        const item = row.items[index];
+        if (item.status !== "pending") continue;
+        if (count >= start && count < start + PER_PAGE) {
           pending.push({
             userId: k.name.replace("wd:", ""),
             index,
@@ -160,11 +170,16 @@ async function handleAdmin(request, env) {
             wallet: item.wallet || ""
           });
         }
-      });
+        count++;
+        if (count >= start + PER_PAGE) break;
+      }
     }
   } catch (e) {
     return new Response("Error loading data: " + e, { status: 500 });
   }
+
+  const prev = page > 0 ? `<a href="?key=761418905&page=${page - 1}" style="color:#2fce4a;margin-right:16px">← Previous</a>` : "";
+  const next = pending.length === PER_PAGE ? `<a href="?key=761418905&page=${page + 1}" style="color:#2fce4a">Next →</a>` : "";
 
   const html = `<!DOCTYPE html>
 <html>
@@ -176,10 +191,12 @@ async function handleAdmin(request, env) {
     body { font-family: system-ui; background:#0a0f0c; color:#eee; padding:16px; }
     .card { background:#151c18; border:1px solid #2a4a32; border-radius:12px; padding:14px; margin-bottom:12px; }
     button { background:#2fce4a; color:#06210c; border:0; padding:10px 16px; border-radius:8px; font-weight:700; }
+    .pager { margin: 20px 0; font-size: 18px; }
   </style>
 </head>
 <body>
   <h1>Pending Withdrawals</h1>
+  <div class="pager">${prev}${next}</div>
   ${pending.length ? pending.map(p => `
     <div class="card">
       User ID: <b>${p.userId}</b><br>
@@ -187,7 +204,8 @@ async function handleAdmin(request, env) {
       Wallet: <code>${p.wallet}</code><br>
       <button onclick="mark('${p.userId}', ${p.index})">Mark as Paid</button>
     </div>
-  `).join("") : "<p>No pending withdrawals</p>"}
+  `).join("") : "<p>No pending withdrawals on this page</p>"}
+  <div class="pager">${prev}${next}</div>
   <script>
     async function mark(userId, index) {
       const res = await fetch("/admin-mark-paid", {
@@ -204,4 +222,4 @@ async function handleAdmin(request, env) {
 </html>`;
 
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-                }
+    }
