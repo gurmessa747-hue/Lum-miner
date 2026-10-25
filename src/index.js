@@ -115,8 +115,12 @@ async function handleWithdraw(request, env) {
   row.items.unshift({ net, status: "pending", wallet: body.wallet || "", requestedAt: Date.now() });
   await write(env, "wd:" + id, row);
 
+  // Notify admin
   const msg = `💰 <b>New Withdrawal Request</b>\n\nUser: ${user.first_name || "Miner"} (ID: ${id})\nAmount: ${amount} LUM\nNet: ${net} LUM\nWallet: <code>${body.wallet || "none"}</code>`;
   await sendTelegram(env, ADMIN_ID, msg);
+
+  // Notify the user immediately
+  await sendTelegram(env, id, "Your withdrawal request has been received.");
 
   return Response.json({ ok: true, items: row.items });
 }
@@ -222,4 +226,4 @@ async function handleAdmin(request, env) {
 </html>`;
 
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-    }
+                                         }
