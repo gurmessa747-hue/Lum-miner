@@ -6,6 +6,7 @@ const CHANNELS = {
 };
 
 const ADMIN_ID = "761418905";
+const BATCH_SIZE = 2000;
 
 export default {
   async fetch(request, env) {
@@ -33,14 +34,17 @@ function userFrom(initData) {
 }
 
 async function sendTelegram(env, chatId, text) {
-  if (!env.BOT_TOKEN) return;
+  if (!env.BOT_TOKEN) return false;
   try {
-    await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" })
     });
-  } catch (e) {}
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
 }
 
 async function handleJoin(request, env) {
@@ -142,6 +146,21 @@ async function handleMarkPaid(request, env) {
   }
 }
 
+async function collectReferredUsers(env) {
+  const userIds = new Set();
+  const list = await env.REFERRALS.list({ prefix: "ref:", limit: 1000 });
+  for (const key of list.keys) {
+    const row = await read(env, key.name);
+    if (!row || !Array.isArray(row.friends)) continue;
+    const inviterId = key.name.replace("ref:", "");
+    if (inviterId) userIds.add(inviterId);
+    for (const f of row.friends) {
+      if (f && f.id) userIds.add(String(f.id));
+    }
+  }
+  return Array.from(userIds);
+}
+
 async function handleBroadcast(request, env) {
   const url = new URL(request.url);
   if (url.searchParams.get("key") !== ADMIN_ID) {
@@ -149,46 +168,60 @@ async function handleBroadcast(request, env) {
   }
 
   const body = await request.json().catch(() => ({}));
+  const action = body.action || "start";
   const text = (body.text || "").trim();
-  if (!text) return Response.json({ ok: false, error: "Missing text" });
 
-  const userIds = new Set();
+  let progress = await read(env, "broadcast:progress") || { users: [], index: 0, text: "", total: 0 };
 
-  try {
-    const list = await env.REFERRALS.list({ prefix: "ref:", limit: 1000 });
-    for (const key of list.keys) {
-      const row = await read(env, key.name);
-      if (!row || !Array.isArray(row.friends)) continue;
-
-      const inviterId = key.name.replace("ref:", "");
-      if (inviterId) userIds.add(inviterId);
-
-      for (const f of row.friends) {
-        if (f && f.id) userIds.add(String(f.id));
-      }
-    }
-  } catch (e) {
-    return Response.json({ ok: false, error: "Failed to list users: " + e });
+  if (action === "start") {
+    if (!text) return Response.json({ ok: false, error: "Missing text" });
+    const users = await collectReferredUsers(env);
+    progress = {
+      users,
+      index: 0,
+      text,
+      total: users.length,
+      startedAt: Date.now()
+    };
+    await write(env, "broadcast:progress", progress);
   }
 
+  if (!progress.users || progress.index >= progress.users.length) {
+    return Response.json({
+      ok: true,
+      done: true,
+      total: progress.total || 0,
+      sent: progress.index || 0,
+      remaining: 0
+    });
+  }
+
+  const start = progress.index;
+  const end = Math.min(start + BATCH_SIZE, progress.users.length);
   let sent = 0;
   let failed = 0;
 
-  for (const id of userIds) {
-    try {
-      await sendTelegram(env, id, text);
-      sent++;
-      await new Promise(r => setTimeout(r, 40)); // ~25 msg/sec
-    } catch (e) {
-      failed++;
-    }
+  for (let i = start; i < end; i++) {
+    const id = progress.users[i];
+    const ok = await sendTelegram(env, id, progress.text);
+    if (ok) sent++;
+    else failed++;
+    await new Promise(r => setTimeout(r, 40));
   }
+
+  progress.index = end;
+  await write(env, "broadcast:progress", progress);
+
+  const remaining = progress.users.length - progress.index;
 
   return Response.json({
     ok: true,
-    total: userIds.size,
-    sent,
-    failed
+    done: remaining === 0,
+    total: progress.users.length,
+    sentThisBatch: sent,
+    failedThisBatch: failed,
+    progress: progress.index,
+    remaining
   });
 }
 
@@ -230,6 +263,9 @@ async function handleAdmin(request, env) {
     return new Response("Error loading data: " + e, { status: 500 });
   }
 
+  const progress = await read(env, "broadcast:progress") || null;
+  const remaining = progress ? Math.max(0, (progress.users?.length || 0) - (progress.index || 0)) : 0;
+
   const prev = page > 0 ? `<a href="?key=761418905&page=${page - 1}" style="color:#2fce4a;margin-right:16px">← Previous</a>` : "";
   const next = pending.length === PER_PAGE ? `<a href="?key=761418905&page=${page + 1}" style="color:#2fce4a">Next →</a>` : "";
 
@@ -242,7 +278,7 @@ async function handleAdmin(request, env) {
   <style>
     body { font-family: system-ui; background:#0a0f0c; color:#eee; padding:16px; }
     .card { background:#151c18; border:1px solid #2a4a32; border-radius:12px; padding:14px; margin-bottom:12px; }
-    button { background:#2fce4a; color:#06210c; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
+    button { background:#2fce4a; color:#06210c; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer; margin-right:8px; }
     .pager { margin: 20px 0; font-size: 18px; }
     textarea { width:100%; min-height:120px; padding:12px; border-radius:8px; border:1px solid #2a4a32; background:#0f131b; color:#eee; font-family:inherit; }
     #result { margin-top:12px; padding:10px; border-radius:8px; background:#14301c; }
@@ -253,9 +289,10 @@ async function handleAdmin(request, env) {
 
   <div class="card">
     <h2>Broadcast to referred users</h2>
-    <textarea id="msg" placeholder="Write your message here (HTML supported)"></textarea>
+    <textarea id="msg" placeholder="Write your message here (HTML supported)">${progress && progress.text ? progress.text : ""}</textarea>
     <br><br>
-    <button onclick="sendBroadcast()">Send to all referred users</button>
+    <button onclick="startBroadcast()">Start new broadcast</button>
+    <button onclick="continueBroadcast()" ${remaining > 0 ? "" : "disabled"}>Continue (${remaining} left)</button>
     <div id="result"></div>
   </div>
 
@@ -283,26 +320,41 @@ async function handleAdmin(request, env) {
       else alert(data.error || "Failed");
     }
 
-    async function sendBroadcast() {
+    async function startBroadcast() {
       const text = document.getElementById("msg").value.trim();
       const result = document.getElementById("result");
       if (!text) { result.textContent = "Please write a message"; return; }
+      result.textContent = "Starting new broadcast...";
+      await sendBatch("start", text);
+    }
 
-      result.textContent = "Sending... this can take a while";
+    async function continueBroadcast() {
+      const result = document.getElementById("result");
+      result.textContent = "Continuing...";
+      await sendBatch("continue");
+    }
+
+    async function sendBatch(action, text) {
+      const result = document.getElementById("result");
       try {
         const res = await fetch("/broadcast?key=761418905", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text })
+          body: JSON.stringify({ action, text: text || "" })
         });
         const data = await res.json();
         if (data.ok) {
-          result.innerHTML = "✅ Done<br>Total users: " + data.total + "<br>Sent: " + data.sent + "<br>Failed: " + data.failed;
+          if (data.done) {
+            result.innerHTML = "✅ Broadcast finished!<br>Total: " + data.total;
+          } else {
+            result.innerHTML = "Batch done.<br>Sent this batch: " + (data.sentThisBatch || 0) + "<br>Progress: " + data.progress + " / " + data.total + "<br>Remaining: " + data.remaining + "<br><br>Click Continue to send the next 2000.";
+          }
+          setTimeout(() => location.reload(), 1500);
         } else {
           result.textContent = "Error: " + (data.error || "Unknown");
         }
       } catch (e) {
-        result.textContent = "Request failed";
+        result.textContent = "Request failed (likely timeout). Click Continue to resume.";
       }
     }
   </script>
@@ -310,4 +362,4 @@ async function handleAdmin(request, env) {
 </html>`;
 
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-}
+      }
