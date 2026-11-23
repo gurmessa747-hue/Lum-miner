@@ -15,6 +15,7 @@ export default {
     if (url.pathname === "/check-join") return handleJoin(request, env);
     if (url.pathname === "/admin-mark-paid") return handleMarkPaid(request, env);
     if (url.pathname === "/admin") return handleAdmin(request, env);
+    if (url.pathname === "/broadcast") return handleBroadcast(request, env);
     return env.ASSETS.fetch(request);
   }
 };
@@ -115,11 +116,8 @@ async function handleWithdraw(request, env) {
   row.items.unshift({ net, status: "pending", wallet: body.wallet || "", requestedAt: Date.now() });
   await write(env, "wd:" + id, row);
 
-  // Notify admin
   const msg = `💰 <b>New Withdrawal Request</b>\n\nUser: ${user.first_name || "Miner"} (ID: ${id})\nAmount: ${amount} LUM\nNet: ${net} LUM\nWallet: <code>${body.wallet || "none"}</code>`;
   await sendTelegram(env, ADMIN_ID, msg);
-
-  // Notify the user immediately
   await sendTelegram(env, id, "Your withdrawal request has been received.");
 
   return Response.json({ ok: true, items: row.items });
@@ -142,6 +140,56 @@ async function handleMarkPaid(request, env) {
   } catch (e) {
     return Response.json({ ok: false, error: String(e) }, { status: 500 });
   }
+}
+
+async function handleBroadcast(request, env) {
+  const url = new URL(request.url);
+  if (url.searchParams.get("key") !== ADMIN_ID) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const text = (body.text || "").trim();
+  if (!text) return Response.json({ ok: false, error: "Missing text" });
+
+  const userIds = new Set();
+
+  try {
+    const list = await env.REFERRALS.list({ prefix: "ref:", limit: 1000 });
+    for (const key of list.keys) {
+      const row = await read(env, key.name);
+      if (!row || !Array.isArray(row.friends)) continue;
+
+      const inviterId = key.name.replace("ref:", "");
+      if (inviterId) userIds.add(inviterId);
+
+      for (const f of row.friends) {
+        if (f && f.id) userIds.add(String(f.id));
+      }
+    }
+  } catch (e) {
+    return Response.json({ ok: false, error: "Failed to list users: " + e });
+  }
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const id of userIds) {
+    try {
+      await sendTelegram(env, id, text);
+      sent++;
+      await new Promise(r => setTimeout(r, 40)); // ~25 msg/sec
+    } catch (e) {
+      failed++;
+    }
+  }
+
+  return Response.json({
+    ok: true,
+    total: userIds.size,
+    sent,
+    failed
+  });
 }
 
 async function handleAdmin(request, env) {
@@ -194,12 +242,24 @@ async function handleAdmin(request, env) {
   <style>
     body { font-family: system-ui; background:#0a0f0c; color:#eee; padding:16px; }
     .card { background:#151c18; border:1px solid #2a4a32; border-radius:12px; padding:14px; margin-bottom:12px; }
-    button { background:#2fce4a; color:#06210c; border:0; padding:10px 16px; border-radius:8px; font-weight:700; }
+    button { background:#2fce4a; color:#06210c; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
     .pager { margin: 20px 0; font-size: 18px; }
+    textarea { width:100%; min-height:120px; padding:12px; border-radius:8px; border:1px solid #2a4a32; background:#0f131b; color:#eee; font-family:inherit; }
+    #result { margin-top:12px; padding:10px; border-radius:8px; background:#14301c; }
   </style>
 </head>
 <body>
-  <h1>Pending Withdrawals</h1>
+  <h1>LUM Admin</h1>
+
+  <div class="card">
+    <h2>Broadcast to referred users</h2>
+    <textarea id="msg" placeholder="Write your message here (HTML supported)"></textarea>
+    <br><br>
+    <button onclick="sendBroadcast()">Send to all referred users</button>
+    <div id="result"></div>
+  </div>
+
+  <h2>Pending Withdrawals</h2>
   <div class="pager">${prev}${next}</div>
   ${pending.length ? pending.map(p => `
     <div class="card">
@@ -210,6 +270,7 @@ async function handleAdmin(request, env) {
     </div>
   `).join("") : "<p>No pending withdrawals on this page</p>"}
   <div class="pager">${prev}${next}</div>
+
   <script>
     async function mark(userId, index) {
       const res = await fetch("/admin-mark-paid", {
@@ -221,9 +282,32 @@ async function handleAdmin(request, env) {
       if (data.ok) location.reload();
       else alert(data.error || "Failed");
     }
+
+    async function sendBroadcast() {
+      const text = document.getElementById("msg").value.trim();
+      const result = document.getElementById("result");
+      if (!text) { result.textContent = "Please write a message"; return; }
+
+      result.textContent = "Sending... this can take a while";
+      try {
+        const res = await fetch("/broadcast?key=761418905", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          result.innerHTML = "✅ Done<br>Total users: " + data.total + "<br>Sent: " + data.sent + "<br>Failed: " + data.failed;
+        } else {
+          result.textContent = "Error: " + (data.error || "Unknown");
+        }
+      } catch (e) {
+        result.textContent = "Request failed";
+      }
+    }
   </script>
 </body>
 </html>`;
 
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-                                         }
+}
