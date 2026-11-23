@@ -6,7 +6,7 @@ const CHANNELS = {
 };
 
 const ADMIN_ID = "761418905";
-const BATCH_SIZE = 2000;
+const BATCH_SIZE = 500;
 
 export default {
   async fetch(request, env) {
@@ -347,7 +347,7 @@ async function handleAdmin(request, env) {
           if (data.done) {
             result.innerHTML = "✅ Broadcast finished!<br>Total: " + data.total;
           } else {
-            result.innerHTML = "Batch done.<br>Sent this batch: " + (data.sentThisBatch || 0) + "<br>Progress: " + data.progress + " / " + data.total + "<br>Remaining: " + data.remaining + "<br><br>Click Continue to send the next 2000.";
+            result.innerHTML = "Batch done.<br>Sent this batch: " + (data.sentThisBatch || 0) + "<br>Progress: " + data.progress + " / " + data.total + "<br>Remaining: " + data.remaining + "<br><br>Click Continue to send the next 500.";
           }
           setTimeout(() => location.reload(), 1500);
         } else {
@@ -362,4 +362,4 @@ async function handleAdmin(request, env) {
 </html>`;
 
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-      }
+}
